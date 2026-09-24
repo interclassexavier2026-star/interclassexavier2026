@@ -1,0 +1,6 @@
+{
+  "name": "Interclasse 2026 - Escola Estadual",
+  "description": "Portal oficial do torneio Interclasse 2026: tabela de jogos, classificação geral, modalidades, perfis das turmas, galeria de fotos e regulamento.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
