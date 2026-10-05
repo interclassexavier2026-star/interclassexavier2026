@@ -33,6 +33,7 @@ interface AdminSettingsModalProps {
   matches?: Match[];
   onRestoreBackup?: (teams: Team[], matches: Match[]) => void;
   onManualSave?: () => Promise<{ success: boolean; teamsCount: number; imagesCount: number; timestamp: string }>;
+  onOpenSupabaseModal?: () => void;
 }
 
 export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
@@ -46,6 +47,7 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
   matches = [],
   onRestoreBackup,
   onManualSave,
+  onOpenSupabaseModal,
 }) => {
   const isDark = theme === 'dark';
 
@@ -420,7 +422,7 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
                       </p>
                       
                       {subAdmin && (
-                        <div className="flex flex-wrap gap-2 pt-1">
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
                           <span className={`inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-lg font-bold font-mono uppercase ${
                             isDark ? 'bg-slate-950 text-slate-300' : 'bg-slate-100 text-slate-700'
                           }`}>
@@ -433,6 +435,20 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
                             <KeyRound className="w-3 h-3 text-emerald-500" />
                             Senha: <span className="font-black text-emerald-500">{subAdmin.password}</span>
                           </span>
+                          {onOpenSupabaseModal && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onClose();
+                                onOpenSupabaseModal();
+                              }}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer"
+                              title="Abrir painel direto do Banco de Dados"
+                            >
+                              <Database className="w-3 h-3 text-emerald-300" />
+                              <span>Ir Direto para o Banco</span>
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>

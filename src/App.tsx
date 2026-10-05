@@ -492,6 +492,7 @@ export function App() {
         matches={matches}
         onRestoreBackup={handleRestoreBackup}
         onManualSave={handleManualSave}
+        onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
       />
 
       <SupabaseConfigModal

@@ -76,24 +76,27 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center justify-between h-20">
           {/* Brand Logo & Admin Settings */}
           <div className="flex items-center gap-3">
-            {/* Supabase DB Button */}
-            {user?.role === 'admin' && onOpenSupabaseModal && (
+            {/* Supabase DB Button (Para todos os admins e coordenadores) */}
+            {(user?.role === 'admin' || user?.role === 'subadmin') && onOpenSupabaseModal && (
               <button
                 type="button"
                 onClick={onOpenSupabaseModal}
-                title="Conectar Banco Supabase"
-                className={`p-2 rounded-xl border flex items-center justify-center transition-all shadow-sm cursor-pointer ${
+                title="Conectar / Ir Direto para o Banco de Dados Supabase"
+                className={`px-3 py-2 rounded-xl border flex items-center gap-1.5 transition-all shadow-sm cursor-pointer ${
                   isDark
                     ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/80 hover:bg-emerald-900 hover:border-emerald-400 hover:scale-105'
                     : 'bg-emerald-50 text-emerald-900 border-emerald-200 hover:bg-emerald-100 hover:scale-105'
                 }`}
               >
-                <Database className="w-5 h-5 text-emerald-400" />
+                <Database className="w-5 h-5 text-emerald-400 shrink-0" />
+                <span className="text-xs font-black uppercase tracking-wider hidden sm:inline">
+                  Banco de Dados
+                </span>
               </button>
             )}
 
             {/* Quick Manual Save Button */}
-            {user?.role === 'admin' && onManualSave && (
+            {(user?.role === 'admin' || user?.role === 'subadmin') && onManualSave && (
               <button
                 type="button"
                 onClick={handleQuickSave}
@@ -113,7 +116,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
 
             {/* Admin Settings Button */}
-            {user?.role === 'admin' && onOpenSettings && (
+            {(user?.role === 'admin' || user?.role === 'subadmin') && onOpenSettings && (
               <button
                 type="button"
                 onClick={onOpenSettings}
