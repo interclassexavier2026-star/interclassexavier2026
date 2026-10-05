@@ -54,10 +54,27 @@ CREATE TABLE IF NOT EXISTS media_images (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
+-- 4. Tabela de Credenciais de Administradores
+CREATE TABLE IF NOT EXISTS app_subadmins (
+  username TEXT PRIMARY KEY,
+  password TEXT NOT NULL,
+  role TEXT DEFAULT 'subadmin',
+  name TEXT,
+  allowed_modality TEXT
+);
+
+-- Inserir as credenciais oficiais dos administradores:
+INSERT INTO app_subadmins (username, password, role, name, allowed_modality) VALUES
+  ('adminfutsalxavier', '2026ADMININTERCLASSEFUTS@L', 'subadmin', 'Admin Futsal', 'futsal'),
+  ('voleiadminxavier2026', 'acessarvolei2026xavierinterclasse', 'subadmin', 'Admin Vôlei', 'volei'),
+  ('tenisdemesaxavieradmin', '26bolsonaropresidenteadmintenisd3MES4', 'subadmin', 'Admin Tênis de Mesa', 'tenis_mesa')
+ON CONFLICT (username) DO UPDATE SET password = EXCLUDED.password;
+
 -- Desabilitar RLS para acesso público simples (ou configure políticas conforme necessário):
 ALTER TABLE teams DISABLE ROW LEVEL SECURITY;
 ALTER TABLE matches DISABLE ROW LEVEL SECURITY;
 ALTER TABLE media_images DISABLE ROW LEVEL SECURITY;
+ALTER TABLE app_subadmins DISABLE ROW LEVEL SECURITY;
 `;
 
 // Helper: Convert Team to Supabase Row

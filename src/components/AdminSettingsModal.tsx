@@ -20,6 +20,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { User, Team, Match } from '../types';
+import { DEFAULT_OFFICIAL_SUBADMINS } from '../utils/constants';
 import { exportFullBackup, importFullBackup } from '../utils/storage';
 
 interface AdminSettingsModalProps {
@@ -107,9 +108,13 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
   const [subAdmins, setSubAdmins] = useState<User[]>(() => {
     try {
       const data = localStorage.getItem('interclasse_subadmins');
-      return data ? JSON.parse(data) : [];
+      if (data) {
+        const parsed: User[] = JSON.parse(data);
+        if (parsed.length > 0) return parsed;
+      }
+      return DEFAULT_OFFICIAL_SUBADMINS;
     } catch {
-      return [];
+      return DEFAULT_OFFICIAL_SUBADMINS;
     }
   });
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { User } from '../types';
+import { DEFAULT_OFFICIAL_SUBADMINS } from '../utils/constants';
 import { X, Shield, User as UserIcon, Lock, KeyRound } from 'lucide-react';
 
 interface LoginModalProps {
@@ -25,58 +26,76 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const cleanUser = username.trim();
+    const cleanPass = password.trim();
+
     if (!cleanUser) {
       setErrorMsg('Por favor, informe seu usuário.');
       return;
     }
 
-    // Check if Admin credentials
+    // 1. Check Super Admin credentials
     if (cleanUser.toLowerCase() === 'interclasse2026xavieradmindia14') {
-      if (password === 'adminXvaier26//dia14/admin') {
+      if (cleanPass === 'adminXvaier26//dia14/admin' || password === 'adminXvaier26//dia14/admin') {
         const adminUser: User = { username: 'INterclasse2026Xavieradmindia14', role: 'admin', name: 'Administrador' };
         onLoginSuccess(adminUser);
         onClose();
         return;
       } else {
-        setErrorMsg('Senha incorreta para a conta de Administrador.');
+        setErrorMsg('Senha incorreta para a conta de Administrador Geral.');
         return;
       }
     }
 
-    // Check if Sub-Admin credentials
+    // 2. Check Sub-Admin credentials (merging DEFAULT_OFFICIAL_SUBADMINS and localStorage)
     try {
+      let customSubAdmins: User[] = [];
       const subAdminsData = localStorage.getItem('interclasse_subadmins');
       if (subAdminsData) {
-        const subAdmins: User[] = JSON.parse(subAdminsData);
-        const matchSub = subAdmins.find(
-          (u) => u.username.trim().toLowerCase() === cleanUser.toLowerCase()
+        customSubAdmins = JSON.parse(subAdminsData);
+      }
+
+      // Merge: custom sub-admins override default ones with same slot/username
+      const allSubAdmins = [...DEFAULT_OFFICIAL_SUBADMINS];
+      customSubAdmins.forEach((c) => {
+        const idx = allSubAdmins.findIndex(
+          (a) => a.allowedModality === c.allowedModality || a.username.toLowerCase() === c.username.toLowerCase()
         );
-        if (matchSub) {
-          if (matchSub.password === password) {
-            const displayNames: Record<string, string> = {
-              futsal: 'Admin Futsal',
-              volei: 'Admin Vôlei',
-              tenis_mesa: 'Admin Tênis de Mesa',
-            };
-            onLoginSuccess({
-              username: matchSub.username,
-              role: 'subadmin',
-              name: displayNames[matchSub.allowedModality || ''] || matchSub.name || 'Coordenador',
-              allowedModality: matchSub.allowedModality,
-            });
-            onClose();
-            return;
-          } else {
-            setErrorMsg('Senha incorreta para esta conta de coordenador.');
-            return;
-          }
+        if (idx >= 0) {
+          allSubAdmins[idx] = c;
+        } else {
+          allSubAdmins.push(c);
+        }
+      });
+
+      const matchSub = allSubAdmins.find(
+        (u) => u.username.trim().toLowerCase() === cleanUser.toLowerCase()
+      );
+
+      if (matchSub) {
+        if (matchSub.password?.trim() === cleanPass || matchSub.password === password) {
+          const displayNames: Record<string, string> = {
+            futsal: 'Admin Futsal',
+            volei: 'Admin Vôlei',
+            tenis_mesa: 'Admin Tênis de Mesa',
+          };
+          onLoginSuccess({
+            username: matchSub.username,
+            role: 'subadmin',
+            name: displayNames[matchSub.allowedModality || ''] || matchSub.name || 'Coordenador',
+            allowedModality: matchSub.allowedModality,
+          });
+          onClose();
+          return;
+        } else {
+          setErrorMsg('Senha incorreta para esta conta de coordenador.');
+          return;
         }
       }
     } catch (err) {
       console.error('Error parsing sub-admins', err);
     }
 
-    setErrorMsg('Acesso restrito. Login permitido apenas para Administradores.');
+    setErrorMsg('Acesso restrito. Usuário ou senha não cadastrados.');
   };
 
   return (

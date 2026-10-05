@@ -1,4 +1,5 @@
 import { Team, Match, User, ModalityType } from '../types';
+import { DEFAULT_OFFICIAL_SUBADMINS } from './constants';
 import { EMBLEM_PRESETS } from './emblems';
 import { saveImageToIndexedDb, imageMemoryCache, getAllImagesFromIndexedDb } from './indexedDbStorage';
 import { supabaseSaveTeam, supabaseSaveMatches, supabaseSaveImage } from './supabaseDb';
@@ -479,9 +480,9 @@ export const exportFullBackup = async (teams: Team[], matches: Match[]) => {
     subadmins: (() => {
       try {
         const d = localStorage.getItem('interclasse_subadmins');
-        return d ? JSON.parse(d) : [];
+        return d ? JSON.parse(d) : DEFAULT_OFFICIAL_SUBADMINS;
       } catch {
-        return [];
+        return DEFAULT_OFFICIAL_SUBADMINS;
       }
     })(),
     imagesMap: images,
