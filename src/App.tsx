@@ -97,16 +97,18 @@ export function App() {
     }
   }, []);
 
-  // Supabase Realtime Subscriptions for live updates on 'matches' and 'teams' across all clients without F5
+  // Supabase Realtime Subscriptions + 5s Smart Polling Backup for Live Public Updates without F5
   useEffect(() => {
     if (!isSupabaseConfigured()) return;
 
     const client = getSupabaseClient();
     if (!client) return;
 
+    console.log('🔌 Inicializando subscrição Realtime no Supabase...');
+
     // Subscrição Realtime na tabela 'matches'
     const matchesChannel = client
-      .channel('matches_realtime_channel')
+      .channel('public_matches_realtime')
       .on(
         'postgres_changes',
         {
@@ -115,7 +117,7 @@ export function App() {
           table: 'matches',
         },
         (payload) => {
-          console.log('⚡ Realtime Matches Event:', payload);
+          console.log('⚡ Evento Realtime recebido em matches:', payload.eventType, payload);
 
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             const updatedMatch = rowToMatch(payload.new);
@@ -142,13 +144,14 @@ export function App() {
           }
         }
       )
-      .subscribe((status) => {
-        console.log('Supabase Realtime matches channel status:', status);
+      .subscribe((status, err) => {
+        console.log('📡 Status do Canal Realtime (matches):', status);
+        if (err) console.error('Erro na subscrição Realtime:', err);
       });
 
     // Subscrição Realtime na tabela 'teams'
     const teamsChannel = client
-      .channel('teams_realtime_channel')
+      .channel('public_teams_realtime')
       .on(
         'postgres_changes',
         {
@@ -157,6 +160,8 @@ export function App() {
           table: 'teams',
         },
         (payload) => {
+          console.log('⚡ Evento Realtime recebido em teams:', payload.eventType, payload);
+
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             const updatedTeam = rowToTeam(payload.new);
             setTeams((prevTeams) => {
@@ -182,12 +187,32 @@ export function App() {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 Status do Canal Realtime (teams):', status);
+      });
+
+    // Polling inteligente de backup a cada 5s (garante atualização pública em conexões instáveis)
+    const pollInterval = setInterval(() => {
+      supabaseFetchMatches().then((remoteMatches) => {
+        if (remoteMatches && remoteMatches.length > 0) {
+          setMatches(remoteMatches);
+          setStoredMatches(remoteMatches);
+        }
+      });
+      supabaseFetchTeams().then((remoteTeams) => {
+        if (remoteTeams && remoteTeams.length > 0) {
+          setTeams(remoteTeams);
+          setStoredTeams(remoteTeams);
+        }
+      });
+    }, 5000);
 
     // Limpeza dos canais ao desmontar
     return () => {
+      console.log('🧹 Removendo canais do Supabase Realtime...');
       client.removeChannel(matchesChannel);
       client.removeChannel(teamsChannel);
+      clearInterval(pollInterval);
     };
   }, []);
 
