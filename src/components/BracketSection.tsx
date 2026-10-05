@@ -365,6 +365,13 @@ export const BracketSection: React.FC<BracketSectionProps> = ({
 
   // Find Champion if Final is decided
   const championTeam = React.useMemo(() => {
+    if (activeModality === 'futsal_fem') {
+      if (futsalFemSummary && futsalFemSummary.isDecided && futsalFemSummary.winnerTeamId) {
+        return teams.find((t) => t.id === futsalFemSummary.winnerTeamId) || null;
+      }
+      return null;
+    }
+
     if (activeModality === 'tenis_mesa_fem') {
       const resetMatch = filteredMatches.find((m) => m.isResetMatch);
       if (resetMatch && resetMatch.isActive && resetMatch.winnerId) {
@@ -383,7 +390,7 @@ export const BracketSection: React.FC<BracketSectionProps> = ({
       (m) => m.roundIndex === maxRoundIndex || m.roundName.includes('Grande Final')
     );
     return finalMatch && finalMatch.winnerId ? teams.find((t) => t.id === finalMatch.winnerId) : null;
-  }, [filteredMatches, activeModality, maxRoundIndex, teams]);
+  }, [filteredMatches, activeModality, maxRoundIndex, teams, futsalFemSummary]);
 
   // Render individual match card with evident photo and classroom
   const renderMatchCardInLine = (match: Match, isFinal = false) => {
@@ -494,13 +501,15 @@ export const BracketSection: React.FC<BracketSectionProps> = ({
               )}
             </div>
 
-            {/* Sala Evidente - Star Badge */}
-            <div className="w-full flex justify-center">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-black text-[9px] uppercase tracking-wider shadow-sm max-w-full truncate">
-                <Star className="w-2.5 h-2.5 text-slate-950 fill-current shrink-0" />
-                <span className="truncate">SALA: {teamA.sala}</span>
-              </span>
-            </div>
+            {/* Sala Evidente - Star Badge (Apenas para salas/turmas reais e definidas) */}
+            {teamA.isDefined && teamA.sala && !teamA.sala.toUpperCase().includes('JOGO') && !teamA.sala.toUpperCase().includes('VENC') && !teamA.sala.toUpperCase().includes('DEFINIR') && !teamA.sala.toUpperCase().includes('AGUARDANDO') && (
+              <div className="w-full flex justify-center">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-black text-[9px] uppercase tracking-wider shadow-sm max-w-full truncate">
+                  <Star className="w-2.5 h-2.5 text-slate-950 fill-current shrink-0" />
+                  <span className="truncate">SALA: {teamA.sala}</span>
+                </span>
+              </div>
+            )}
 
             {/* Nome / Atleta */}
             <div className="w-full px-1">
@@ -605,13 +614,15 @@ export const BracketSection: React.FC<BracketSectionProps> = ({
               )}
             </div>
 
-            {/* Sala Evidente - Star Badge */}
-            <div className="w-full flex justify-center">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-black text-[9px] uppercase tracking-wider shadow-sm max-w-full truncate">
-                <Star className="w-2.5 h-2.5 text-slate-950 fill-current shrink-0" />
-                <span className="truncate">SALA: {teamB.sala}</span>
-              </span>
-            </div>
+            {/* Sala Evidente - Star Badge (Apenas para salas/turmas reais e definidas) */}
+            {teamB.isDefined && teamB.sala && !teamB.sala.toUpperCase().includes('JOGO') && !teamB.sala.toUpperCase().includes('VENC') && !teamB.sala.toUpperCase().includes('DEFINIR') && !teamB.sala.toUpperCase().includes('AGUARDANDO') && (
+              <div className="w-full flex justify-center">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-black text-[9px] uppercase tracking-wider shadow-sm max-w-full truncate">
+                  <Star className="w-2.5 h-2.5 text-slate-950 fill-current shrink-0" />
+                  <span className="truncate">SALA: {teamB.sala}</span>
+                </span>
+              </div>
+            )}
 
             {/* Nome / Atleta */}
             <div className="w-full px-1">
@@ -1221,9 +1232,11 @@ export const BracketSection: React.FC<BracketSectionProps> = ({
                             <Shirt className="w-6 h-6" />
                           </div>
                         )}
-                        <span className="inline-block px-2 py-0.5 rounded bg-amber-500/20 text-amber-700 text-[10px] font-black uppercase">
-                          SALA REGISTRADA: {infoA.sala}
-                        </span>
+                        {infoA.isDefined && infoA.sala && !infoA.sala.toUpperCase().includes('JOGO') && !infoA.sala.toUpperCase().includes('VENC') && !infoA.sala.toUpperCase().includes('DEFINIR') && !infoA.sala.toUpperCase().includes('AGUARDANDO') && (
+                          <span className="inline-block px-2 py-0.5 rounded bg-amber-500/20 text-amber-700 text-[10px] font-black uppercase">
+                            SALA REGISTRADA: {infoA.sala}
+                          </span>
+                        )}
                         
                         <div className="space-y-1 text-left">
                           <label className="block text-[10px] font-black uppercase text-slate-500">
@@ -1280,9 +1293,11 @@ export const BracketSection: React.FC<BracketSectionProps> = ({
                             <Shirt className="w-6 h-6" />
                           </div>
                         )}
-                        <span className="inline-block px-2 py-0.5 rounded bg-amber-500/20 text-amber-700 text-[10px] font-black uppercase">
-                          SALA REGISTRADA: {infoB.sala}
-                        </span>
+                        {infoB.isDefined && infoB.sala && !infoB.sala.toUpperCase().includes('JOGO') && !infoB.sala.toUpperCase().includes('VENC') && !infoB.sala.toUpperCase().includes('DEFINIR') && !infoB.sala.toUpperCase().includes('AGUARDANDO') && (
+                          <span className="inline-block px-2 py-0.5 rounded bg-amber-500/20 text-amber-700 text-[10px] font-black uppercase">
+                            SALA REGISTRADA: {infoB.sala}
+                          </span>
+                        )}
 
                         <div className="space-y-1 text-left">
                           <label className="block text-[10px] font-black uppercase text-slate-500">
