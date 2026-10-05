@@ -93,7 +93,7 @@ const teamToRow = (t: Team) => ({
 });
 
 // Helper: Convert Supabase Row to Team
-const rowToTeam = (row: any): Team => ({
+export const rowToTeam = (row: any): Team => ({
   id: row.id,
   name: row.name,
   modality: row.modality,
@@ -135,7 +135,7 @@ const matchToRow = (m: Match) => ({
 });
 
 // Helper: Convert Supabase Row to Match
-const rowToMatch = (row: any): Match => ({
+export const rowToMatch = (row: any): Match => ({
   id: row.id,
   modality: row.modality,
   roundName: row.round_name,

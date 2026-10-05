@@ -24,8 +24,8 @@ import { AdminSettingsModal } from './components/AdminSettingsModal';
 import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import { CountdownLockScreen } from './components/CountdownLockScreen';
 import { Footer } from './components/Footer';
-import { isSupabaseConfigured } from './utils/supabaseClient';
-import { supabaseFetchTeams, supabaseFetchMatches, supabaseFetchImages } from './utils/supabaseDb';
+import { isSupabaseConfigured, getSupabaseClient } from './utils/supabaseClient';
+import { supabaseFetchTeams, supabaseFetchMatches, supabaseFetchImages, rowToMatch, rowToTeam } from './utils/supabaseDb';
 
 export function App() {
   const [user, setUser] = useState<User | null>(getStoredUser());
@@ -95,6 +95,100 @@ export function App() {
           console.warn('Could not fetch initial data from Supabase:', err);
         });
     }
+  }, []);
+
+  // Supabase Realtime Subscriptions for live updates on 'matches' and 'teams' across all clients without F5
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+
+    const client = getSupabaseClient();
+    if (!client) return;
+
+    // Subscrição Realtime na tabela 'matches'
+    const matchesChannel = client
+      .channel('matches_realtime_channel')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Escuta INSERT, UPDATE e DELETE
+          schema: 'public',
+          table: 'matches',
+        },
+        (payload) => {
+          console.log('⚡ Realtime Matches Event:', payload);
+
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const updatedMatch = rowToMatch(payload.new);
+            setMatches((prevMatches) => {
+              const exists = prevMatches.some((m) => m.id === updatedMatch.id);
+              let nextMatches: Match[];
+              if (exists) {
+                nextMatches = prevMatches.map((m) =>
+                  m.id === updatedMatch.id ? updatedMatch : m
+                );
+              } else {
+                nextMatches = [...prevMatches, updatedMatch];
+              }
+              setStoredMatches(nextMatches);
+              return nextMatches;
+            });
+          } else if (payload.eventType === 'DELETE') {
+            const deletedId = payload.old.id;
+            setMatches((prevMatches) => {
+              const nextMatches = prevMatches.filter((m) => m.id !== deletedId);
+              setStoredMatches(nextMatches);
+              return nextMatches;
+            });
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Supabase Realtime matches channel status:', status);
+      });
+
+    // Subscrição Realtime na tabela 'teams'
+    const teamsChannel = client
+      .channel('teams_realtime_channel')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'teams',
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const updatedTeam = rowToTeam(payload.new);
+            setTeams((prevTeams) => {
+              const exists = prevTeams.some((t) => t.id === updatedTeam.id);
+              let nextTeams: Team[];
+              if (exists) {
+                nextTeams = prevTeams.map((t) =>
+                  t.id === updatedTeam.id ? updatedTeam : t
+                );
+              } else {
+                nextTeams = [...prevTeams, updatedTeam];
+              }
+              setStoredTeams(nextTeams);
+              return nextTeams;
+            });
+          } else if (payload.eventType === 'DELETE') {
+            const deletedId = payload.old.id;
+            setTeams((prevTeams) => {
+              const nextTeams = prevTeams.filter((t) => t.id !== deletedId);
+              setStoredTeams(nextTeams);
+              return nextTeams;
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    // Limpeza dos canais ao desmontar
+    return () => {
+      client.removeChannel(matchesChannel);
+      client.removeChannel(teamsChannel);
+    };
   }, []);
 
   // Countdown lock state: Lock all visitors until 14/10/2026 at 06:45 AM
