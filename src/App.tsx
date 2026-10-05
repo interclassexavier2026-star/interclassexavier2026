@@ -21,8 +21,11 @@ import { BracketSection } from './components/BracketSection';
 import { StandingsSection } from './components/StandingsSection';
 import { LoginModal } from './components/LoginModal';
 import { AdminSettingsModal } from './components/AdminSettingsModal';
+import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import { CountdownLockScreen } from './components/CountdownLockScreen';
 import { Footer } from './components/Footer';
+import { isSupabaseConfigured } from './utils/supabaseClient';
+import { supabaseFetchTeams, supabaseFetchMatches, supabaseFetchImages } from './utils/supabaseDb';
 
 export function App() {
   const [user, setUser] = useState<User | null>(getStoredUser());
@@ -30,6 +33,7 @@ export function App() {
   const [activeSection, setActiveSection] = useState<string>('chaveamento');
   const [isLoginOpen, setIsLoginOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
 
   // Global Theme State ('light' | 'dark')
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -68,6 +72,29 @@ export function App() {
     }).catch((err) => {
       console.warn('Could not read IndexedDB image store', err);
     });
+
+    // Hydrate from Supabase on mount if configured
+    if (isSupabaseConfigured()) {
+      Promise.all([supabaseFetchTeams(), supabaseFetchMatches(), supabaseFetchImages()])
+        .then(([remoteTeams, remoteMatches, remoteImages]) => {
+          if (remoteTeams && remoteTeams.length > 0) {
+            setTeams(remoteTeams);
+            setStoredTeams(remoteTeams);
+          }
+          if (remoteMatches && remoteMatches.length > 0) {
+            setMatches(remoteMatches);
+            setStoredMatches(remoteMatches);
+          }
+          if (remoteImages) {
+            for (const [id, dataUrl] of Object.entries(remoteImages)) {
+              saveImageToIndexedDb(id, dataUrl).catch(() => {});
+            }
+          }
+        })
+        .catch((err) => {
+          console.warn('Could not fetch initial data from Supabase:', err);
+        });
+    }
   }, []);
 
   // Countdown lock state: Lock all visitors until 14/10/2026 at 06:45 AM
@@ -75,9 +102,7 @@ export function App() {
     () => new Date().getTime() >= COUNTDOWN_TARGET.getTime()
   );
   // Admin dynamic bypass toggle for the countdown lock screen
-  const [countdownForceDisabled, setCountdownForceDisabled] = useState<boolean>(() => {
-    return localStorage.getItem('interclasse_countdown_force_disabled') === 'true';
-  });
+  const [countdownForceDisabled, setCountdownForceDisabled] = useState<boolean>(true);
   // Admin preview toggle: allows admin to preview the countdown lock screen
   const [previewCountdownAsAdmin, setPreviewCountdownAsAdmin] = useState<boolean>(false);
 
@@ -350,10 +375,8 @@ export function App() {
   const currentModalityTeams = teams.filter((t) => t.modality === activeModality);
   const currentModalityMatches = matches.filter((m) => m.modality === activeModality);
 
-  // Check if locked to countdown screen
-  const isUserLocked =
-    (!countdownForceDisabled && !isUnlockedByTime && user?.role !== 'admin' && user?.role !== 'subadmin') ||
-    (previewCountdownAsAdmin && user?.role === 'admin');
+  // Check if locked to countdown screen (disabled so system opens directly)
+  const isUserLocked = false;
 
   // If locked, render the countdown lock screen
   if (isUserLocked) {
@@ -390,6 +413,7 @@ export function App() {
         onSelectSection={setActiveSection}
         onTogglePreviewCountdown={() => setPreviewCountdownAsAdmin(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         theme={theme}
         onToggleTheme={handleToggleTheme}
         onManualSave={handleManualSave}
@@ -468,6 +492,16 @@ export function App() {
         matches={matches}
         onRestoreBackup={handleRestoreBackup}
         onManualSave={handleManualSave}
+      />
+
+      <SupabaseConfigModal
+        isOpen={isSupabaseModalOpen}
+        onClose={() => setIsSupabaseModalOpen(false)}
+        onDataRestored={(restoredTeams, restoredMatches) => {
+          if (restoredTeams.length > 0) setTeams(restoredTeams);
+          if (restoredMatches.length > 0) setMatches(restoredMatches);
+        }}
+        theme={theme}
       />
 
       {/* Floating Save Confirmation Toast */}

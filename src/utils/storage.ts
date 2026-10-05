@@ -1,6 +1,7 @@
 import { Team, Match, User, ModalityType } from '../types';
 import { EMBLEM_PRESETS } from './emblems';
 import { saveImageToIndexedDb, imageMemoryCache, getAllImagesFromIndexedDb } from './indexedDbStorage';
+import { supabaseSaveTeam, supabaseSaveMatches, supabaseSaveImage } from './supabaseDb';
 
 const STORAGE_KEYS = {
   USER: 'interclasse_user',
@@ -388,13 +389,15 @@ export const getStoredTeams = (): Team[] => {
 };
 
 export const setStoredTeams = (teams: Team[]) => {
-  // 1. Immediately cache and persist all images to high-capacity IndexedDB
+  // 1. Immediately cache and persist all images to high-capacity IndexedDB & Supabase
   if (typeof window !== 'undefined') {
     teams.forEach((t) => {
       if (t.imageUrl && t.imageUrl.length > 0 && !t.imageUrl.startsWith('idb://')) {
         imageMemoryCache.set(t.id, t.imageUrl);
         saveImageToIndexedDb(t.id, t.imageUrl).catch(() => {});
+        supabaseSaveImage(t.id, t.imageUrl).catch(() => {});
       }
+      supabaseSaveTeam(t).catch(() => {});
     });
   }
 
@@ -404,20 +407,18 @@ export const setStoredTeams = (teams: Team[]) => {
   } catch (err) {
     console.warn('LocalStorage quota limit detected! Preserving images in IndexedDB and optimizing localStorage copy.', err);
     try {
-      // In case of quota saturation, store teams without huge dataUrls in localStorage
-      // while keeping images safe and sound in IndexedDB and memory cache
       const safeTeams = teams.map((t) => {
         if (t.imageUrl && t.imageUrl.length > 5000) {
           return {
             ...t,
-            imageUrl: undefined, // Will be hydrated seamlessly from IndexedDB on load
+            imageUrl: undefined, // Will be hydrated seamlessly from IndexedDB/Supabase on load
           };
         }
         return t;
       });
       localStorage.setItem(STORAGE_KEYS.TEAMS, JSON.stringify(safeTeams));
     } catch (innerErr) {
-      console.error('Failed to save teams to localStorage even in safe mode', innerErr);
+      console.error('Critical LocalStorage Error', innerErr);
     }
   }
 };
@@ -1560,11 +1561,20 @@ export const getStoredMatches = (): Match[] => {
     }
     const parsed: Match[] = JSON.parse(data);
 
-    // Migration check 1: If futsal_fem still has old group/round-robin matches, migrate to Ida e Volta Final
-    const hasOldFemGroupMatches = parsed.some(
-      (m) => m.modality === 'futsal_fem' && (m.roundName.includes('Rodada') || m.id.includes('r1_m1'))
-    );
-    if (hasOldFemGroupMatches) {
+    // Migration check 1: Enforce strictly 2 matches for futsal_fem (Jogo de Ida e Jogo de Volta)
+    const femMatches = parsed.filter((m) => m.modality === 'futsal_fem');
+    const isInvalidFemMatches =
+      femMatches.length !== 2 ||
+      femMatches.some(
+        (m) =>
+          m.roundName.includes('Semifinal') ||
+          m.roundName.includes('Quartas') ||
+          m.roundName.includes('Rodada') ||
+          m.id.includes('_r1_') ||
+          m.id.includes('_r2_')
+      );
+
+    if (isInvalidFemMatches) {
       const currentTeams = getStoredTeams();
       const newFemMatches = generateFutsalFemFinalIdaEVolta(currentTeams);
       const migrated = [
@@ -1616,6 +1626,7 @@ export const getStoredMatches = (): Match[] => {
 
 export const setStoredMatches = (matches: Match[]) => {
   localStorage.setItem(STORAGE_KEYS.MATCHES, JSON.stringify(matches));
+  supabaseSaveMatches(matches).catch(() => {});
 };
 
 // Final Ida e Volta Generator for Futsal Feminino (2 Equipes Finalistas)

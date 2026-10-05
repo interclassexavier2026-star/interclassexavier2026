@@ -2,6 +2,8 @@ import React, { useState, useRef } from 'react';
 import { Match, ModalityType, User, Team } from '../types';
 import { MODALITY_CONFIGS } from '../utils/constants';
 import { getFutsalFemFinalSummary } from '../utils/futsalFemUtils';
+import { MatchupConfigModal } from './MatchupConfigModal';
+import { downloadBackupJson, restoreBackupFromJson } from '../utils/jsonBackup';
 import {
   Trophy,
   Zap,
@@ -20,6 +22,7 @@ import {
   CheckCircle2,
   Search,
   Pencil,
+  Download,
 } from 'lucide-react';
 
 interface BracketSectionProps {
@@ -39,6 +42,7 @@ interface BracketSectionProps {
     penaltyWinnerId?: string
   ) => void;
   onGenerateBracket: () => void;
+  onUpdateMatches?: (updatedMatches: Match[]) => void;
   onSelectSection?: (section: string) => void;
 }
 
@@ -67,10 +71,14 @@ export const BracketSection: React.FC<BracketSectionProps> = ({
   theme = 'dark',
   onUpdateMatchScore,
   onGenerateBracket,
+  onUpdateMatches,
   onSelectSection,
 }) => {
   const modalityConfig = MODALITY_CONFIGS[activeModality];
   const isDark = theme === 'dark';
+
+  // State for Matchup Config Modal
+  const [isMatchupModalOpen, setIsMatchupModalOpen] = useState<boolean>(false);
 
   // Filters Embedded in Bracket
   const [selectedRoom, setSelectedRoom] = useState<string>('');
@@ -330,9 +338,19 @@ export const BracketSection: React.FC<BracketSectionProps> = ({
       }
     }
 
+    if (fallbackName && (fallbackName.toLowerCase().includes('jogo') || fallbackName.toLowerCase().includes('venc'))) {
+      return {
+        name: fallbackName,
+        sala: fallbackName.toUpperCase().includes('JOGO') ? fallbackName.toUpperCase() : `CONFRONTO ${fallbackName}`,
+        captain: undefined,
+        imageUrl: undefined,
+        shirtColor: '#1e293b',
+        isDefined: false,
+      };
+    }
+
     const isPending =
       !fallbackName ||
-      fallbackName.toLowerCase().startsWith('vencedor') ||
       fallbackName.toLowerCase().startsWith('a definir');
 
     return {
@@ -399,30 +417,37 @@ export const BracketSection: React.FC<BracketSectionProps> = ({
         {/* Top Gold Accent Line */}
         <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 opacity-90" />
 
-        {/* Card Header: Phase & Edit Button */}
+        {/* Card Header: Phase & Jogo Badge */}
         <div
           className={`flex items-center justify-between text-[11px] font-black uppercase tracking-wider pb-3 mb-3 border-b ${
             isDark ? 'text-slate-400 border-slate-800/80' : 'text-slate-600 border-slate-100'
           }`}
         >
-          <span className="flex items-center gap-1.5 text-amber-500 font-bold">
-            <Flame className="w-3.5 h-3.5 text-amber-500" />
-            <span>{match.roundName}</span>
-          </span>
-
-          {match.isBye && (
-            <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-2 py-0.5 rounded-md text-[9px] font-extrabold flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-              W.O.
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="flex items-center gap-1.5 text-amber-500 font-bold">
+              <Flame className="w-3.5 h-3.5 text-amber-500" />
+              <span>{match.roundName.replace(/\s+\d+$/, '').trim()}</span>
             </span>
-          )}
-
-          {canEditMatchScore(user, match.modality) && !match.isBye && (
-            <span className="flex items-center gap-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[9px] px-2 py-1 rounded shadow-md transition-colors">
-              <Pencil className="w-3 h-3" />
-              <span>EDITAR</span>
+            <span className="px-2 py-0.5 rounded-lg bg-amber-500 text-slate-950 font-black text-[10px] tracking-wider shadow-sm">
+              JOGO {match.matchNumber}
             </span>
-          )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {match.isBye && (
+              <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-2 py-0.5 rounded-md text-[9px] font-extrabold flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                W.O.
+              </span>
+            )}
+
+            {canEditMatchScore(user, match.modality) && !match.isBye && (
+              <span className="flex items-center gap-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[9px] px-2 py-1 rounded shadow-md transition-colors">
+                <Pencil className="w-3 h-3" />
+                <span>EDITAR</span>
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Duel Face-off Area */}
@@ -647,22 +672,45 @@ export const BracketSection: React.FC<BracketSectionProps> = ({
           </div>
 
           {user?.role === 'admin' && (
-            <button
-              onClick={onGenerateBracket}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 text-xs font-black rounded-xl shadow-lg transition-all hover:scale-105 uppercase tracking-wider cursor-pointer"
-            >
-              {activeModality === 'futsal_fem' ? (
-                <>
-                  <Trophy className="w-4 h-4 text-slate-950" />
-                  Configurar Final (Ida e Volta)
-                </>
-              ) : (
-                <>
-                  <Zap className="w-4 h-4" />
-                  Sorteio Aleatório / Reset
-                </>
+            <div className="flex flex-wrap items-center gap-2">
+              {activeModality !== 'futsal_fem' && (
+                <button
+                  type="button"
+                  onClick={() => setIsMatchupModalOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black rounded-xl shadow-lg transition-all hover:scale-105 uppercase tracking-wider cursor-pointer"
+                >
+                  <Swords className="w-4 h-4 text-white" />
+                  <span>Configurar Confrontos (Quem Pega Quem)</span>
+                </button>
               )}
-            </button>
+
+              <button
+                type="button"
+                onClick={downloadBackupJson}
+                className="flex items-center gap-2 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-black rounded-xl border border-slate-700 shadow-md transition-all hover:scale-105 uppercase tracking-wider cursor-pointer"
+                title="Salvar tudo em JSON antes do banco de dados (Vercel)"
+              >
+                <Download className="w-4 h-4 text-amber-400" />
+                <span>Salvar JSON Completo</span>
+              </button>
+
+              <button
+                onClick={onGenerateBracket}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 text-xs font-black rounded-xl shadow-lg transition-all hover:scale-105 uppercase tracking-wider cursor-pointer"
+              >
+                {activeModality === 'futsal_fem' ? (
+                  <>
+                    <Trophy className="w-4 h-4 text-slate-950" />
+                    Configurar Final (Ida e Volta)
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4" />
+                    Sorteio Aleatório / Reset
+                  </>
+                )}
+              </button>
+            </div>
           )}
         </div>
 
@@ -845,187 +893,73 @@ export const BracketSection: React.FC<BracketSectionProps> = ({
                   isDark ? 'bg-slate-950/80 border-blue-900/80' : 'bg-slate-100 border-slate-200'
                 }`}
               >
-                {activeModality === 'tenis_mesa_fem' ? (
-                  <>
-                    {/* Option: Todas as Chaves */}
+                {/* Option: Todas as Fases */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedPhase('all')}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
+                    selectedPhase === 'all'
+                      ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black shadow-md scale-[1.02]'
+                      : isDark
+                      ? 'text-slate-300 hover:text-white hover:bg-slate-900'
+                      : 'text-slate-700 hover:text-slate-950 hover:bg-white'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Todas as Fases</span>
+                  <span
+                    className={`ml-1 text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                      selectedPhase === 'all'
+                        ? 'bg-slate-950 text-amber-300'
+                        : isDark
+                        ? 'bg-blue-900/60 text-slate-300'
+                        : 'bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {filteredMatches.length}
+                  </span>
+                </button>
+
+                {/* Individual Phases: 16 avos, Oitavas, Quartas, Semifinal, Final */}
+                {sortedRoundIndices.map((rIdx) => {
+                  const matchesInRound = roundsMap.get(rIdx) || [];
+                  const phaseTitle = getPhaseDisplayName(rIdx, matchesInRound[0]);
+                  const isSelected = selectedPhase === rIdx;
+                  const isFinal = rIdx === maxRoundIndex;
+
+                  return (
                     <button
+                      key={rIdx}
                       type="button"
-                      onClick={() => setSelectedPhase('all')}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
-                        selectedPhase === 'all'
+                      onClick={() => setSelectedPhase(rIdx)}
+                      className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
+                        isSelected
                           ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black shadow-md scale-[1.02]'
                           : isDark
                           ? 'text-slate-300 hover:text-white hover:bg-slate-900'
                           : 'text-slate-700 hover:text-slate-950 hover:bg-white'
                       }`}
                     >
-                      <Layers className="w-3.5 h-3.5" />
-                      <span>Todas as Chaves</span>
+                      {isFinal ? (
+                        <Trophy className="w-3.5 h-3.5 text-amber-500" />
+                      ) : (
+                        <Flame className="w-3.5 h-3.5 text-amber-500" />
+                      )}
+                      <span>{phaseTitle}</span>
                       <span
                         className={`ml-1 text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                          selectedPhase === 'all'
+                          isSelected
                             ? 'bg-slate-950 text-amber-300'
                             : isDark
                             ? 'bg-blue-900/60 text-slate-300'
                             : 'bg-slate-200 text-slate-700'
                         }`}
                       >
-                        {filteredMatches.length}
+                        {matchesInRound.length}
                       </span>
                     </button>
-
-                    {/* Option: Chave Superior */}
-                    <button
-                      type="button"
-                      onClick={() => setSelectedPhase('winners')}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
-                        selectedPhase === 'winners'
-                          ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black shadow-md scale-[1.02]'
-                          : isDark
-                          ? 'text-slate-300 hover:text-white hover:bg-slate-900'
-                          : 'text-slate-700 hover:text-slate-950 hover:bg-white'
-                      }`}
-                    >
-                      <Crown className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Chave Superior</span>
-                      <span
-                        className={`ml-1 text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                          selectedPhase === 'winners'
-                            ? 'bg-slate-950 text-amber-300'
-                            : isDark
-                            ? 'bg-blue-900/60 text-slate-300'
-                            : 'bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        {filteredMatches.filter(m => m.bracketType === 'winners').length}
-                      </span>
-                    </button>
-
-                    {/* Option: Repescagem */}
-                    <button
-                      type="button"
-                      onClick={() => setSelectedPhase('losers')}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
-                        selectedPhase === 'losers'
-                          ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black shadow-md scale-[1.02]'
-                          : isDark
-                          ? 'text-slate-300 hover:text-white hover:bg-slate-900'
-                          : 'text-slate-700 hover:text-slate-950 hover:bg-white'
-                      }`}
-                    >
-                      <Swords className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Repescagem</span>
-                      <span
-                        className={`ml-1 text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                          selectedPhase === 'losers'
-                            ? 'bg-slate-950 text-amber-300'
-                            : isDark
-                            ? 'bg-blue-900/60 text-slate-300'
-                            : 'bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        {filteredMatches.filter(m => m.bracketType === 'losers').length}
-                      </span>
-                    </button>
-
-                    {/* Option: Grande Final */}
-                    <button
-                      type="button"
-                      onClick={() => setSelectedPhase('grand_final')}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
-                        selectedPhase === 'grand_final'
-                          ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black shadow-md scale-[1.02]'
-                          : isDark
-                          ? 'text-slate-300 hover:text-white hover:bg-slate-900'
-                          : 'text-slate-700 hover:text-slate-950 hover:bg-white'
-                      }`}
-                    >
-                      <Trophy className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Grande Final</span>
-                      <span
-                        className={`ml-1 text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                          selectedPhase === 'grand_final'
-                            ? 'bg-slate-950 text-amber-300'
-                            : isDark
-                            ? 'bg-blue-900/60 text-slate-300'
-                            : 'bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        {filteredMatches.filter(m => m.bracketType === 'grand_final').length}
-                      </span>
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {/* Option: Todas as Fases */}
-                    <button
-                      type="button"
-                      onClick={() => setSelectedPhase('all')}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
-                        selectedPhase === 'all'
-                          ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black shadow-md scale-[1.02]'
-                          : isDark
-                          ? 'text-slate-300 hover:text-white hover:bg-slate-900'
-                          : 'text-slate-700 hover:text-slate-950 hover:bg-white'
-                      }`}
-                    >
-                      <Layers className="w-3.5 h-3.5" />
-                      <span>Todas as Fases</span>
-                      <span
-                        className={`ml-1 text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                          selectedPhase === 'all'
-                            ? 'bg-slate-950 text-amber-300'
-                            : isDark
-                            ? 'bg-blue-900/60 text-slate-300'
-                            : 'bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        {filteredMatches.length}
-                      </span>
-                    </button>
-
-                    {/* Individual Phases: 16 avos, Oitavas, Quartas, Semifinal, Final */}
-                    {sortedRoundIndices.map((rIdx) => {
-                      const matchesInRound = roundsMap.get(rIdx) || [];
-                      const phaseTitle = getPhaseDisplayName(rIdx, matchesInRound[0]);
-                      const isSelected = selectedPhase === rIdx;
-                      const isFinal = rIdx === maxRoundIndex;
-
-                      return (
-                        <button
-                          key={rIdx}
-                          type="button"
-                          onClick={() => setSelectedPhase(rIdx)}
-                          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black shadow-md scale-[1.02]'
-                              : isDark
-                              ? 'text-slate-300 hover:text-white hover:bg-slate-900'
-                              : 'text-slate-700 hover:text-slate-950 hover:bg-white'
-                          }`}
-                        >
-                          {isFinal ? (
-                            <Trophy className="w-3.5 h-3.5 text-amber-500" />
-                          ) : (
-                            <Flame className="w-3.5 h-3.5 text-amber-500" />
-                          )}
-                          <span>{phaseTitle}</span>
-                          <span
-                            className={`ml-1 text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                              isSelected
-                                ? 'bg-slate-950 text-amber-300'
-                                : isDark
-                                ? 'bg-blue-900/60 text-slate-300'
-                                : 'bg-slate-200 text-slate-700'
-                            }`}
-                          >
-                            {matchesInRound.length}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </>
-                )}
+                  );
+                })}
               </div>
             </div>
 
@@ -1150,123 +1084,6 @@ export const BracketSection: React.FC<BracketSectionProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
                   {filteredMatches.map((m) => renderMatchCardInLine(m, false))}
                 </div>
-              </div>
-            ) : activeModality === 'tenis_mesa_fem' ? (
-              // Double Elimination Custom View
-              <div className="space-y-8">
-                {/* Winners Bracket */}
-                {(selectedPhase === 'all' || selectedPhase === 'winners') && doubleEliminationData && doubleEliminationData.winnersIndices.length > 0 && (
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-2 pb-2 border-b border-sky-900/30">
-                      <div className="p-1.5 rounded-lg bg-sky-500/10 border border-sky-500/30 text-sky-400">
-                        <Crown className="w-5 h-5 text-sky-400" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-black font-display uppercase tracking-wide">
-                          Chave Superior (Winners Bracket)
-                        </h3>
-                        <p className="text-xs text-slate-400">
-                          Disputada por atletas que ainda não perderam nenhuma partida.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-6">
-                      {doubleEliminationData.winnersIndices.map((rIdx) => {
-                        const currentMatches = doubleEliminationData.winnersMap.get(rIdx) || [];
-                        const phaseTitle = currentMatches[0]?.roundName || `Fase ${rIdx}`;
-                        return (
-                          <div key={rIdx} className="space-y-3">
-                            <div className="flex items-center justify-between pb-1.5 border-b border-sky-950/60">
-                              <span className="text-xs font-black uppercase text-sky-400 tracking-wider">
-                                {phaseTitle} ({currentMatches.length} {currentMatches.length === 1 ? 'confronto' : 'confrontos'})
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pt-1 px-1">
-                              {currentMatches.map((m) => renderMatchCardInLine(m, false))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Losers/Repescagem Bracket */}
-                {(selectedPhase === 'all' || selectedPhase === 'losers') && doubleEliminationData && doubleEliminationData.losersIndices.length > 0 && (
-                  <div className="space-y-6 pt-4">
-                    <div className="flex items-center gap-2 pb-2 border-b border-amber-950/40">
-                      <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-500">
-                        <Swords className="w-5 h-5 text-amber-500" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-black font-display uppercase tracking-wide">
-                          Chave de Repescagem (Losers Bracket)
-                        </h3>
-                        <p className="text-xs text-slate-400">
-                          Disputada por quem já perdeu uma partida. Quem perder aqui é eliminado definitivamente.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-6">
-                      {doubleEliminationData.losersIndices.map((rIdx) => {
-                        const currentMatches = doubleEliminationData.losersMap.get(rIdx) || [];
-                        const phaseTitle = currentMatches[0]?.roundName || `Fase ${rIdx}`;
-                        return (
-                          <div key={rIdx} className="space-y-3">
-                            <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
-                              <span className="text-xs font-black uppercase text-amber-400 tracking-wider">
-                                {phaseTitle} ({currentMatches.length} {currentMatches.length === 1 ? 'confronto' : 'confrontos'})
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pt-1 px-1">
-                              {currentMatches.map((m) => renderMatchCardInLine(m, false))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Grande Final Bracket */}
-                {(selectedPhase === 'all' || selectedPhase === 'grand_final') && doubleEliminationData && doubleEliminationData.grandIndices.length > 0 && (
-                  <div className="space-y-6 pt-4">
-                    <div className="flex items-center gap-2 pb-2 border-b border-yellow-500/30">
-                      <div className="p-1.5 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 animate-pulse">
-                        <Trophy className="w-5 h-5 text-yellow-400" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-black font-display uppercase tracking-wide">
-                          Grande Final (Grand Final)
-                        </h3>
-                        <p className="text-xs text-slate-400">
-                          Confronto final entre o campeão da Chave Superior (invicto) e o campeão da Repescagem.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-6">
-                      {doubleEliminationData.grandIndices.map((rIdx) => {
-                        const currentMatches = doubleEliminationData.grandMap.get(rIdx) || [];
-                        const phaseTitle = currentMatches[0]?.roundName || `Fase ${rIdx}`;
-                        return (
-                          <div key={rIdx} className="space-y-3">
-                            <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
-                              <span className="text-xs font-black uppercase text-yellow-400 tracking-wider">
-                                {phaseTitle}
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pt-1 px-1">
-                              {currentMatches.map((m) => renderMatchCardInLine(m, true))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
               </div>
             ) : selectedPhase !== 'all' ? (
               // Single Selected Phase in a Line
@@ -1567,6 +1384,18 @@ export const BracketSection: React.FC<BracketSectionProps> = ({
               </form>
             </div>
           </div>
+        )}
+        {/* Modal Matchup Configurator */}
+        {onUpdateMatches && (
+          <MatchupConfigModal
+            isOpen={isMatchupModalOpen}
+            onClose={() => setIsMatchupModalOpen(false)}
+            matches={matches}
+            teams={teams}
+            activeModality={activeModality}
+            onSaveMatches={onUpdateMatches}
+            theme={theme}
+          />
         )}
       </div>
     </section>

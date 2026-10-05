@@ -15,6 +15,7 @@ import {
   Moon,
   Settings,
   Save,
+  Database,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -27,6 +28,7 @@ interface NavbarProps {
   onSelectSection: (section: string) => void;
   onTogglePreviewCountdown?: () => void;
   onOpenSettings?: () => void;
+  onOpenSupabaseModal?: () => void;
   theme?: 'light' | 'dark';
   onToggleTheme?: () => void;
   onManualSave?: () => Promise<any>;
@@ -45,6 +47,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   theme = 'dark',
   onToggleTheme,
   onManualSave,
+  onOpenSupabaseModal,
 }) => {
   const isBeforeTarget = new Date().getTime() < COUNTDOWN_TARGET.getTime();
   const isDark = theme === 'dark';
@@ -73,6 +76,22 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center justify-between h-20">
           {/* Brand Logo & Admin Settings */}
           <div className="flex items-center gap-3">
+            {/* Supabase DB Button */}
+            {user?.role === 'admin' && onOpenSupabaseModal && (
+              <button
+                type="button"
+                onClick={onOpenSupabaseModal}
+                title="Conectar Banco Supabase"
+                className={`p-2 rounded-xl border flex items-center justify-center transition-all shadow-sm cursor-pointer ${
+                  isDark
+                    ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/80 hover:bg-emerald-900 hover:border-emerald-400 hover:scale-105'
+                    : 'bg-emerald-50 text-emerald-900 border-emerald-200 hover:bg-emerald-100 hover:scale-105'
+                }`}
+              >
+                <Database className="w-5 h-5 text-emerald-400" />
+              </button>
+            )}
+
             {/* Quick Manual Save Button */}
             {user?.role === 'admin' && onManualSave && (
               <button
