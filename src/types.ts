@@ -25,6 +25,7 @@ export interface Team {
   players?: string[]; // Campo para adicionar jogadores/elenco para Futsal e Vôlei
   playerName?: string; // Para Tênis de Mesa
   playerClass?: string; // Para Tênis de Mesa: Sala/Turma do aluno
+  fouls?: number; // Para controle manual de faltas (futsal apenas)
   createdDate: string;
 }
 
@@ -47,5 +48,15 @@ export interface Match {
   location?: string;
   nextMatchId?: string;
   nextMatchSlot?: 'A' | 'B';
+  sourceMatchAId?: string; // ID do confronto de onde vem o participante A (ex: "Vencedor Jogo 1")
+  sourceMatchBId?: string; // ID do confronto de onde vem o participante B (ex: "Vencedor Jogo 4")
+  sourceLabelA?: string;   // Rótulo customizado (ex: "Venc. Jogo 1")
+  sourceLabelB?: string;   // Rótulo customizado (ex: "Venc. Jogo 4")
+  loserNextMatchId?: string;
+  loserNextMatchSlot?: 'A' | 'B';
+  bracketType?: 'winners' | 'losers' | 'grand_final';
+  isResetMatch?: boolean;
+  isActive?: boolean;
   isBye?: boolean; // Se um time avançou direto sem oponente
+  penaltyWinnerId?: string; // Vencedor nos pênaltis (para futsal_fem em caso de empate)
 }

@@ -1,6 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { Team } from '../types';
 import { EMBLEM_PRESETS } from '../utils/emblems';
+import { compressImage } from '../utils/imageCompressor';
+import { saveImageToIndexedDb, imageMemoryCache } from '../utils/indexedDbStorage';
 import {
   Upload,
   X,
@@ -10,6 +12,7 @@ import {
   Sparkles,
   Link as LinkIcon,
   Shirt,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface EditTeamImageModalProps {
@@ -30,6 +33,7 @@ export const EditTeamImageModal: React.FC<EditTeamImageModalProps> = ({
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'upload' | 'presets' | 'url'>('upload');
+  const [isOptimizing, setIsOptimizing] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sync state if team changes
@@ -43,28 +47,24 @@ export const EditTeamImageModal: React.FC<EditTeamImageModalProps> = ({
 
   if (!isOpen || !team) return null;
 
-  // Process file upload (drag & drop or input selection)
-  const handleFileProcess = (file: File) => {
+  // Process file upload with automatic high-capacity compression & resizing
+  const handleFileProcess = async (file: File) => {
     setErrorMsg('');
     if (!file.type.startsWith('image/')) {
       setErrorMsg('Por favor selecione um arquivo de imagem válido (PNG, JPG, SVG, WebP).');
       return;
     }
 
-    // Limit file size to ~3MB to prevent localStorage quota issues
-    if (file.size > 3 * 1024 * 1024) {
-      setErrorMsg('A imagem é muito grande. Por favor escolha uma imagem menor que 3MB.');
-      return;
+    setIsOptimizing(true);
+    try {
+      const compressed = await compressImage(file, 400, 0.8);
+      setCurrentPreview(compressed);
+    } catch (err) {
+      console.error('Error compressing image', err);
+      setErrorMsg('Ocorreu um erro ao otimizar a imagem. Tente novamente.');
+    } finally {
+      setIsOptimizing(false);
     }
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      if (result) {
-        setCurrentPreview(result);
-      }
-    };
-    reader.readAsDataURL(file);
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -100,7 +100,12 @@ export const EditTeamImageModal: React.FC<EditTeamImageModalProps> = ({
   };
 
   const handleSave = () => {
-    onSaveImage(team.id, currentPreview.trim() || undefined);
+    const finalUrl = currentPreview.trim() || undefined;
+    if (finalUrl) {
+      imageMemoryCache.set(team.id, finalUrl);
+      saveImageToIndexedDb(team.id, finalUrl).catch(() => {});
+    }
+    onSaveImage(team.id, finalUrl);
     onClose();
   };
 
@@ -261,26 +266,36 @@ export const EditTeamImageModal: React.FC<EditTeamImageModalProps> = ({
                 }`}
               >
                 <div className="w-12 h-12 rounded-full bg-sky-100 flex items-center justify-center text-sky-600 mx-auto mb-2">
-                  <Upload className="w-6 h-6" />
+                  <Upload className={`w-6 h-6 ${isOptimizing ? 'animate-spin' : ''}`} />
                 </div>
                 <p className="text-xs font-bold text-sky-950 uppercase">
-                  Arraste e solte o brasão ou foto aqui
+                  {isOptimizing ? 'Otimizando Imagem em Alta Resolução...' : 'Arraste e solte o brasão ou foto aqui'}
                 </p>
                 <p className="text-[11px] text-slate-500 mt-1">
-                  ou clique no botão abaixo para escolher do computador ou celular
+                  {isOptimizing
+                    ? 'Comprimindo e armazenando em alta capacidade para evitar erros de limite...'
+                    : 'ou clique no botão abaixo para escolher do computador ou celular'}
                 </p>
 
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    fileInputRef.current?.click();
-                  }}
-                  className="mt-3 px-5 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-black uppercase tracking-wider inline-flex items-center gap-2 shadow-md transition-all hover:scale-105 cursor-pointer"
-                >
-                  <Upload className="w-4 h-4" />
-                  <span>Carregar do Dispositivo</span>
-                </button>
+                <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 text-[10px] font-black uppercase tracking-wider">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Capacidade Ampliada • Sem Erros de Limite</span>
+                </div>
+
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    disabled={isOptimizing}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      fileInputRef.current?.click();
+                    }}
+                    className="px-5 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-black uppercase tracking-wider inline-flex items-center gap-2 shadow-md transition-all hover:scale-105 cursor-pointer"
+                  >
+                    <Upload className={`w-4 h-4 ${isOptimizing ? 'animate-spin' : ''}`} />
+                    <span>{isOptimizing ? 'Otimizando...' : 'Carregar do Dispositivo'}</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}

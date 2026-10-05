@@ -59,127 +59,106 @@ export const CountdownLockScreen: React.FC<CountdownLockScreenProps> = ({
 
       {/* Top Bar with Discreet Admin Access */}
       <header className="relative z-10 max-w-7xl mx-auto w-full px-6 py-6 flex items-center justify-between border-b border-sky-900/40">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-600 to-amber-500 flex items-center justify-center text-white shadow-lg shadow-sky-500/30">
-            <Trophy className="w-5 h-5 text-amber-200" />
-          </div>
-          <div>
-            <span className="text-lg font-black font-display tracking-wider text-white uppercase block leading-none">
-              INTERCLASSE <span className="text-amber-400">2026</span>
-            </span>
-            <span className="text-[10px] font-extrabold tracking-widest text-sky-400 uppercase">
-              Portal Oficial dos Jogos
-            </span>
+        {/* Left Spacer to balance centered title on larger screens */}
+        <div className="w-40 hidden sm:block" />
+
+        {/* Center Animated Logo Art */}
+        <div className="flex-1 flex justify-center">
+          <div className="relative group">
+            <div className="absolute -inset-1.5 bg-gradient-to-r from-amber-500 via-sky-400 to-yellow-400 rounded-2xl blur-[14px] opacity-80 animate-pulse"></div>
+            <div className="relative px-8 py-3 bg-slate-950/95 border border-slate-800 rounded-2xl leading-none flex items-center shadow-2xl">
+              <span className="text-3xl sm:text-5xl md:text-6xl font-black font-display tracking-[0.3em] pl-[0.3em] text-center bg-gradient-to-r from-amber-400 via-sky-300 to-amber-300 bg-clip-text text-transparent animate-pulse drop-shadow-[0_2px_15px_rgba(251,191,36,0.6)] select-none uppercase">
+                INTERCLASSE
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Admin Login Button */}
-        <button
-          onClick={onAdminLoginClick}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-900/80 hover:bg-slate-800 text-sky-200 hover:text-amber-300 border border-sky-800/80 hover:border-amber-400/80 rounded-xl text-xs font-bold transition-all shadow-md hover:scale-105"
-        >
-          <Lock className="w-3.5 h-3.5 text-amber-400" />
-          <span>Acesso da Comissão / Admin</span>
-        </button>
+        {/* Right Admin Login Button */}
+        <div className="w-40 flex justify-end">
+          <button
+            onClick={onAdminLoginClick}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-900/80 hover:bg-slate-800 text-sky-200 hover:text-amber-300 border border-sky-800/80 hover:border-amber-400/80 rounded-xl text-xs font-bold transition-all shadow-md hover:scale-105 shrink-0"
+          >
+            <Lock className="w-3.5 h-3.5 text-amber-400" />
+            <span>Administração</span>
+          </button>
+        </div>
       </header>
 
       {/* Main Countdown Section */}
-      <main className="relative z-10 max-w-4xl mx-auto px-6 py-10 flex flex-col items-center text-center space-y-8 my-auto">
-        {/* Release Date Badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-300 text-xs font-black uppercase tracking-widest animate-pulse">
-          <Calendar className="w-4 h-4 text-amber-400" />
-          <span>Grande Abertura: 14 de Outubro às 06:45</span>
-        </div>
-
-        {/* Main Headline */}
-        <div className="space-y-3">
-          <h1 className="text-4xl sm:text-6xl md:text-7xl font-black font-display tracking-tight text-white uppercase drop-shadow-[0_4px_24px_rgba(56,189,248,0.4)]">
-            CONTAGEM <span className="text-amber-400 drop-shadow-[0_4px_24px_rgba(251,191,36,0.6)]">REGRESSIVA</span>
-          </h1>
-          <p className="text-sm sm:text-base text-sky-200/90 font-medium max-w-2xl mx-auto leading-relaxed">
-            Os chaveamentos, tabelas de vitórias, confrontos das turmas e resultados serão liberados para todos os alunos e torcedores no apito inicial do evento.
-          </p>
-        </div>
-
-        {/* 4 Clock Blocks */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 w-full max-w-3xl pt-2">
-          {/* Days */}
-          <div className="bg-gradient-to-b from-slate-900/90 to-blue-950/90 border-2 border-sky-500/40 rounded-3xl p-5 sm:p-6 shadow-2xl backdrop-blur-md relative overflow-hidden group hover:border-amber-400 transition-all">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-400 to-amber-400" />
-            <span className="block text-4xl sm:text-6xl font-black font-display text-white tracking-tight drop-shadow-md">
-              {String(timeLeft.days).padStart(2, '0')}
-            </span>
-            <span className="text-[11px] sm:text-xs font-black uppercase text-sky-300 tracking-widest mt-2 block">
-              DIAS
-            </span>
+      <main className="relative z-10 max-w-2xl mx-auto px-4 py-8 flex flex-col items-center my-auto">
+        <div className="w-full bg-[#0b1329]/95 border border-slate-800/80 rounded-[32px] p-6 sm:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col items-center text-center space-y-6 sm:space-y-8 relative overflow-hidden">
+          {/* Top Pill Indicator */}
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-950/80 border border-slate-800 text-[11px] font-black uppercase tracking-wider text-sky-400">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
+            <span>CRONÔMETRO DOS JOGOS</span>
           </div>
 
-          {/* Hours */}
-          <div className="bg-gradient-to-b from-slate-900/90 to-blue-950/90 border-2 border-sky-500/40 rounded-3xl p-5 sm:p-6 shadow-2xl backdrop-blur-md relative overflow-hidden group hover:border-amber-400 transition-all">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-400 to-amber-400" />
-            <span className="block text-4xl sm:text-6xl font-black font-display text-white tracking-tight drop-shadow-md">
-              {String(timeLeft.hours).padStart(2, '0')}
-            </span>
-            <span className="text-[11px] sm:text-xs font-black uppercase text-sky-300 tracking-widest mt-2 block">
-              HORAS
-            </span>
+          {/* Heading */}
+          <div className="space-y-3">
+            <h1 className="text-3xl sm:text-5xl font-black font-display tracking-tight text-white uppercase leading-none">
+              CONTAGEM <span className="text-amber-400 font-black drop-shadow-[0_0_15px_rgba(251,191,36,0.6)]">REGRESSIVA</span>
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-400 font-medium max-w-md mx-auto leading-relaxed">
+              Tabelas de vitórias, confrontos das turmas e resultados ao vivo no apito de início.
+            </p>
           </div>
 
-          {/* Minutes */}
-          <div className="bg-gradient-to-b from-slate-900/90 to-blue-950/90 border-2 border-sky-500/40 rounded-3xl p-5 sm:p-6 shadow-2xl backdrop-blur-md relative overflow-hidden group hover:border-amber-400 transition-all">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-400 to-amber-400" />
-            <span className="block text-4xl sm:text-6xl font-black font-display text-white tracking-tight drop-shadow-md">
-              {String(timeLeft.minutes).padStart(2, '0')}
-            </span>
-            <span className="text-[11px] sm:text-xs font-black uppercase text-sky-300 tracking-widest mt-2 block">
-              MINUTOS
-            </span>
+          {/* Countdown Boxes Row */}
+          <div className="grid grid-cols-4 gap-2.5 sm:gap-4 w-full">
+            {/* Days Box */}
+            <div className="bg-[#070d1e]/80 border border-slate-800 rounded-2xl py-4 sm:py-5 flex flex-col items-center justify-center">
+              <span className="text-2xl sm:text-4xl font-black font-display text-white tracking-tight">
+                {String(timeLeft.days).padStart(2, '0')}
+              </span>
+              <span className="text-[10px] font-extrabold text-slate-500 tracking-wider mt-1.5 uppercase">
+                DIAS
+              </span>
+            </div>
+
+            {/* Hours Box */}
+            <div className="bg-[#070d1e]/80 border border-slate-800 rounded-2xl py-4 sm:py-5 flex flex-col items-center justify-center">
+              <span className="text-2xl sm:text-4xl font-black font-display text-white tracking-tight">
+                {String(timeLeft.hours).padStart(2, '0')}
+              </span>
+              <span className="text-[10px] font-extrabold text-slate-500 tracking-wider mt-1.5 uppercase">
+                HORAS
+              </span>
+            </div>
+
+            {/* Minutes Box */}
+            <div className="bg-[#070d1e]/80 border border-slate-800 rounded-2xl py-4 sm:py-5 flex flex-col items-center justify-center">
+              <span className="text-2xl sm:text-4xl font-black font-display text-white tracking-tight">
+                {String(timeLeft.minutes).padStart(2, '0')}
+              </span>
+              <span className="text-[10px] font-extrabold text-slate-500 tracking-wider mt-1.5 uppercase">
+                MIN
+              </span>
+            </div>
+
+            {/* Seconds Highlighted Box */}
+            <div className="bg-[#0c1221]/95 border-2 border-amber-500/80 rounded-2xl py-4 sm:py-5 flex flex-col items-center justify-center shadow-[0_0_15px_rgba(245,158,11,0.15)]">
+              <span className="text-2xl sm:text-4xl font-black font-display text-amber-400 tracking-tight drop-shadow-[0_2px_8px_rgba(251,191,36,0.4)]">
+                {String(timeLeft.seconds).padStart(2, '0')}
+              </span>
+              <span className="text-[10px] font-black text-amber-500 tracking-wider mt-1.5 uppercase">
+                SEG
+              </span>
+            </div>
           </div>
 
-          {/* Seconds */}
-          <div className="bg-gradient-to-b from-slate-900/90 to-blue-950/90 border-2 border-amber-400/60 rounded-3xl p-5 sm:p-6 shadow-2xl backdrop-blur-md relative overflow-hidden group hover:border-amber-300 transition-all ring-2 ring-amber-400/20">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-400 to-yellow-300" />
-            <span className="block text-4xl sm:text-6xl font-black font-display text-amber-400 tracking-tight drop-shadow-[0_2px_12px_rgba(251,191,36,0.6)]">
-              {String(timeLeft.seconds).padStart(2, '0')}
-            </span>
-            <span className="text-[11px] sm:text-xs font-black uppercase text-amber-300 tracking-widest mt-2 block">
-              SEGUNDOS
+          {/* Warning Banner */}
+          <div className="w-full bg-[#070c1d]/90 border border-slate-800/80 rounded-2xl p-3 sm:p-4 text-[11px] sm:text-xs leading-relaxed">
+            <span className="text-amber-500 font-black uppercase">AVISO DA ORGANIZAÇÃO:</span>{' '}
+            <span className="text-slate-300 font-bold">
+              O acesso aos chaveamentos e escalação estará liberado em 14/10 à meia-noite (00:00).
             </span>
           </div>
-        </div>
-
-        {/* Modalities Preview Chips */}
-        <div className="flex flex-wrap items-center justify-center gap-2 pt-4">
-          <span className="px-3.5 py-1.5 rounded-xl bg-slate-900/90 border border-sky-800 text-xs font-bold text-sky-200 flex items-center gap-1.5">
-            ⚽ Futsal Masc.
-          </span>
-          <span className="px-3.5 py-1.5 rounded-xl bg-slate-900/90 border border-sky-800 text-xs font-bold text-sky-200 flex items-center gap-1.5">
-            ⚽ Futsal Fem.
-          </span>
-          <span className="px-3.5 py-1.5 rounded-xl bg-slate-900/90 border border-sky-800 text-xs font-bold text-sky-200 flex items-center gap-1.5">
-            🏐 Vôlei Misto
-          </span>
-          <span className="px-3.5 py-1.5 rounded-xl bg-slate-900/90 border border-sky-800 text-xs font-bold text-sky-200 flex items-center gap-1.5">
-            🏓 Tênis de Mesa Masc.
-          </span>
-          <span className="px-3.5 py-1.5 rounded-xl bg-slate-900/90 border border-sky-800 text-xs font-bold text-sky-200 flex items-center gap-1.5">
-            🏓 Tênis de Mesa Fem.
-          </span>
-        </div>
-
-        {/* Notice Card */}
-        <div className="w-full max-w-xl bg-blue-950/60 border border-blue-800/60 rounded-2xl p-4 text-xs text-sky-200 text-center">
-          <p className="font-bold text-white uppercase mb-0.5">Aviso da Organização:</p>
-          <p>
-            O acesso a chaveamentos, escalações e pontuação estará disponível pontualmente no dia 14/10 às 06:45 para todos os dispositivos.
-          </p>
         </div>
       </main>
 
-      {/* Footer info */}
-      <footer className="relative z-10 py-6 text-center text-xs text-slate-500 border-t border-sky-950">
-        Torneio Escolar Interclasse 2026 • Todos os direitos reservados
-      </footer>
+
     </div>
   );
 };

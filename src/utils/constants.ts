@@ -1,7 +1,7 @@
 import { ModalityType } from '../types';
 
-// Data do temporizador: 14 de Outubro de 2026 às 06:45:00
-export const COUNTDOWN_TARGET = new Date('2026-10-14T06:45:00');
+// Data do temporizador: 14 de Outubro de 2026 às 00:00:00 (Meia-noite)
+export const COUNTDOWN_TARGET = new Date('2026-10-14T00:00:00');
 
 export interface ModalityConfig {
   id: ModalityType;

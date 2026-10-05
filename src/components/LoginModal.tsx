@@ -31,9 +31,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     }
 
     // Check if Admin credentials
-    if (cleanUser.toLowerCase() === 'admin') {
-      if (password === '1234') {
-        const adminUser: User = { username: 'admin', role: 'admin', name: 'Administrador' };
+    if (cleanUser.toLowerCase() === 'interclasse2026xavieradmindia14') {
+      if (password === 'adminXvaier26//dia14/admin') {
+        const adminUser: User = { username: 'INterclasse2026Xavieradmindia14', role: 'admin', name: 'Administrador' };
         onLoginSuccess(adminUser);
         onClose();
         return;
@@ -124,7 +124,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   setUsername(e.target.value);
                   setErrorMsg('');
                 }}
-                placeholder="Nome de Usuário (ex: admin)"
+                placeholder="Nome de Usuário"
                 className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-sm font-medium border outline-none transition-all ${
                   isDark
                     ? 'bg-slate-950 border-blue-900 text-white focus:border-amber-400'
@@ -148,7 +148,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   setPassword(e.target.value);
                   setErrorMsg('');
                 }}
-                placeholder="Sua Senha (ex: 1234)"
+                placeholder="Sua Senha"
                 className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-sm font-medium border outline-none transition-all ${
                   isDark
                     ? 'bg-slate-950 border-blue-900 text-white focus:border-amber-400'

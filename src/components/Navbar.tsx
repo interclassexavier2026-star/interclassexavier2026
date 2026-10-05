@@ -14,6 +14,7 @@ import {
   Sun,
   Moon,
   Settings,
+  Save,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -28,6 +29,7 @@ interface NavbarProps {
   onOpenSettings?: () => void;
   theme?: 'light' | 'dark';
   onToggleTheme?: () => void;
+  onManualSave?: () => Promise<any>;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -42,9 +44,24 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSettings,
   theme = 'dark',
   onToggleTheme,
+  onManualSave,
 }) => {
   const isBeforeTarget = new Date().getTime() < COUNTDOWN_TARGET.getTime();
   const isDark = theme === 'dark';
+  const [justSaved, setJustSaved] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
+
+  const handleQuickSave = async () => {
+    if (!onManualSave) return;
+    setIsSaving(true);
+    try {
+      await onManualSave();
+      setJustSaved(true);
+      setTimeout(() => setJustSaved(false), 3000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <header className={`sticky top-0 z-40 backdrop-blur-md border-b transition-colors duration-300 ${
@@ -56,32 +73,33 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center justify-between h-20">
           {/* Brand Logo & Admin Settings */}
           <div className="flex items-center gap-3">
-            <div
-              className="flex items-center gap-3 cursor-pointer"
-              onClick={() => onSelectSection('chaveamento')}
-            >
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-sky-600 to-amber-500 flex items-center justify-center text-white shadow-md shadow-sky-200">
-                <Trophy className="w-6 h-6 text-amber-200" />
-              </div>
-              <div>
-                <span className={`text-xl font-black font-display tracking-tight uppercase block leading-none ${
-                  isDark ? 'text-white' : 'text-sky-950'
-                }`}>
-                  INTERCLASSE <span className="text-sky-500">2026</span>
-                </span>
-                <span className="text-[10px] font-bold tracking-wider text-sky-500 uppercase">
-                  Torneio Escolar Oficial
-                </span>
-              </div>
-            </div>
+            {/* Quick Manual Save Button */}
+            {user?.role === 'admin' && onManualSave && (
+              <button
+                type="button"
+                onClick={handleQuickSave}
+                disabled={isSaving}
+                title="Salvar todas as alterações e imagens agora"
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm cursor-pointer ${
+                  justSaved
+                    ? 'bg-emerald-500 text-slate-950 font-black scale-105'
+                    : isDark
+                    ? 'bg-emerald-600/90 hover:bg-emerald-500 text-white hover:scale-105'
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-white hover:scale-105'
+                }`}
+              >
+                <Save className={`w-3.5 h-3.5 ${isSaving ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">{justSaved ? '✓ Salvo!' : 'Salvar Tudo'}</span>
+              </button>
+            )}
 
-            {/* Admin Settings Button placed right next to Interclasse 2026 */}
+            {/* Admin Settings Button */}
             {user?.role === 'admin' && onOpenSettings && (
               <button
                 type="button"
                 onClick={onOpenSettings}
-                title="Configurações do Sistema"
-                className={`p-2 rounded-xl border flex items-center justify-center transition-all shadow-sm ml-1 cursor-pointer ${
+                title="Configurações do Sistema & Backup"
+                className={`p-2 rounded-xl border flex items-center justify-center transition-all shadow-sm cursor-pointer ${
                   isDark
                     ? 'bg-slate-800/90 text-amber-300 border-slate-700 hover:bg-slate-700 hover:border-amber-400/80 hover:scale-105'
                     : 'bg-sky-50 text-sky-900 border-sky-200 hover:bg-sky-100 hover:scale-105'
@@ -106,7 +124,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             >
               <GitBranch className="w-4 h-4" />
-              Chaveamento
+              Chaveamento/Jogos
             </button>
 
             <button
@@ -132,7 +150,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             >
               <Flame className="w-4 h-4 text-amber-500" />
-              Vitórias
+              Estatística
             </button>
           </nav>
 
@@ -169,14 +187,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                   ) : (
                     <UserCheck className="w-4 h-4 text-sky-500" />
                   )}
-                  <span className="text-xs font-bold truncate max-w-[100px]">
-                    {user.name || user.username}
+                  <span className="text-xs font-black uppercase tracking-wider">
+                    {user.name === 'Administrador' ? 'admin' : (user.name || user.username)}
                   </span>
-                  {user.role === 'admin' && (
-                    <span className="px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 text-[10px] font-black uppercase tracking-wider">
-                      ADMIN
-                    </span>
-                  )}
                 </div>
                 <button
                   onClick={onLogout}
@@ -212,7 +225,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             <GitBranch className="w-3.5 h-3.5" />
-            <span>Chaveamento</span>
+            <span>Chaveamento/Jogos</span>
           </button>
 
           <button
@@ -238,7 +251,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             <Flame className="w-3.5 h-3.5 text-amber-500" />
-            <span>Vitórias</span>
+            <span>Estatística</span>
           </button>
         </div>
 

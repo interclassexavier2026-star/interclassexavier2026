@@ -1,6 +1,26 @@
-import React, { useState } from 'react';
-import { Settings, Lock, Unlock, Eye, X, Shield, Clock, Users, Trash2, Plus, KeyRound, User as UserIcon } from 'lucide-react';
-import { User } from '../types';
+import React, { useState, useRef } from 'react';
+import {
+  Settings,
+  Lock,
+  Unlock,
+  Eye,
+  X,
+  Shield,
+  Clock,
+  Users,
+  Trash2,
+  Plus,
+  KeyRound,
+  User as UserIcon,
+  Save,
+  Download,
+  UploadCloud,
+  CheckCircle2,
+  Database,
+  RefreshCw,
+} from 'lucide-react';
+import { User, Team, Match } from '../types';
+import { exportFullBackup, importFullBackup } from '../utils/storage';
 
 interface AdminSettingsModalProps {
   isOpen: boolean;
@@ -9,6 +29,10 @@ interface AdminSettingsModalProps {
   onToggleCountdown: () => void;
   onPreviewCountdown: () => void;
   theme?: 'light' | 'dark';
+  teams?: Team[];
+  matches?: Match[];
+  onRestoreBackup?: (teams: Team[], matches: Match[]) => void;
+  onManualSave?: () => Promise<{ success: boolean; teamsCount: number; imagesCount: number; timestamp: string }>;
 }
 
 export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
@@ -18,8 +42,65 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
   onToggleCountdown,
   onPreviewCountdown,
   theme = 'dark',
+  teams = [],
+  matches = [],
+  onRestoreBackup,
+  onManualSave,
 }) => {
   const isDark = theme === 'dark';
+
+  const [saveStatus, setSaveStatus] = useState<string>('');
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [importStatus, setImportStatus] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSaveAll = async () => {
+    if (!onManualSave) return;
+    setIsSaving(true);
+    setSaveStatus('');
+    try {
+      const res = await onManualSave();
+      setSaveStatus(`✓ Tudo salvo com sucesso! ${res.teamsCount} equipes e ${res.imagesCount} imagens salvas com segurança.`);
+      setTimeout(() => setSaveStatus(''), 7000);
+    } catch (err) {
+      setSaveStatus('Erro ao salvar os dados.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleExportBackup = async () => {
+    setIsExporting(true);
+    try {
+      await exportFullBackup(teams, matches);
+      setSaveStatus('✓ Arquivo de backup completo com todas as fotos baixado com sucesso!');
+      setTimeout(() => setSaveStatus(''), 6000);
+    } catch (err) {
+      setSaveStatus('Erro ao exportar backup.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportStatus('Processando e restaurando backup...');
+    try {
+      const text = await file.text();
+      await importFullBackup(text, (newTeams, newMatches) => {
+        if (onRestoreBackup) {
+          onRestoreBackup(newTeams, newMatches);
+        }
+      });
+      setImportStatus('✓ Backup restaurado com sucesso! Todas as equipes e imagens foram recarregadas.');
+      setTimeout(() => setImportStatus(''), 7000);
+    } catch (err: any) {
+      setImportStatus(`Erro ao restaurar: ${err.message || 'Arquivo inválido'}`);
+    }
+    e.target.value = '';
+  };
 
   const [subAdmins, setSubAdmins] = useState<User[]>(() => {
     try {
@@ -57,8 +138,8 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
     const p = inputs[slot].p.trim();
     if (!u || !p) return;
 
-    if (u.toLowerCase() === 'admin') {
-      alert("O nome de usuário 'admin' é reservado para o administrador geral.");
+    if (u.toLowerCase() === 'interclasse2026xavieradmindia14') {
+      alert("Este nome de usuário é reservado para o administrador geral.");
       return;
     }
 
@@ -123,6 +204,101 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto scrollbar-thin">
+          {/* Complete Save & Image Backup Center */}
+          <div className={`p-5 rounded-2xl border-2 space-y-4 transition-colors ${
+            isDark ? 'bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950/40 border-emerald-500/40' : 'bg-gradient-to-br from-emerald-50/50 via-white to-sky-50/50 border-emerald-300'
+          }`}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm mt-0.5">
+                  <Database className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className={`text-sm font-black uppercase font-display ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                      Armazenamento, Salvamento & Backup
+                    </h4>
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                      IndexedDB Ativo
+                    </span>
+                  </div>
+                  <p className={`text-xs mt-1 leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                    Todas as imagens, equipes, elencos e confrontos estão seguros no seu navegador. Use os botões abaixo para forçar o salvamento imediato ou baixar um arquivo de backup completo com todas as fotos.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Status alerts if any */}
+            {saveStatus && (
+              <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 text-xs font-bold flex items-center gap-2 animate-fade-in">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{saveStatus}</span>
+              </div>
+            )}
+
+            {importStatus && (
+              <div className={`p-3 rounded-xl border text-xs font-bold flex items-center gap-2 animate-fade-in ${
+                importStatus.includes('Erro')
+                  ? 'bg-rose-500/15 border-rose-500/40 text-rose-400'
+                  : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
+              }`}>
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>{importStatus}</span>
+              </div>
+            )}
+
+            {/* Action Buttons Row */}
+            <div className="pt-2 border-t border-slate-800/40 flex flex-wrap gap-2.5 items-center">
+              {/* Button 1: Force Save All Now */}
+              <button
+                type="button"
+                onClick={handleSaveAll}
+                disabled={isSaving}
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md transition-all hover:scale-105 cursor-pointer disabled:opacity-50"
+              >
+                <Save className={`w-4 h-4 ${isSaving ? 'animate-spin' : ''}`} />
+                <span>{isSaving ? 'Salvando Tudo...' : 'Salvar Tudo Agora'}</span>
+              </button>
+
+              {/* Button 2: Download Full Backup (.json) */}
+              <button
+                type="button"
+                onClick={handleExportBackup}
+                disabled={isExporting}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider border shadow-sm transition-all hover:scale-105 cursor-pointer ${
+                  isDark
+                    ? 'bg-slate-800 hover:bg-slate-700 text-amber-300 border-slate-700 hover:border-amber-400'
+                    : 'bg-white hover:bg-amber-50 text-amber-900 border-amber-300'
+                }`}
+              >
+                <Download className={`w-4 h-4 ${isExporting ? 'animate-bounce' : ''}`} />
+                <span>{isExporting ? 'Gerando Backup...' : 'Baixar Backup (.json)'}</span>
+              </button>
+
+              {/* Button 3: Restore Backup */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImportFile}
+                accept=".json"
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider border shadow-sm transition-all hover:scale-105 cursor-pointer ${
+                  isDark
+                    ? 'bg-slate-800/60 hover:bg-slate-700 text-slate-300 border-slate-700'
+                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                }`}
+              >
+                <UploadCloud className="w-4 h-4 text-sky-400" />
+                <span>Restaurar Backup</span>
+              </button>
+            </div>
+          </div>
+
           {/* Lock Screen Toggle Option */}
           <div className={`p-5 rounded-2xl border-2 space-y-3 transition-colors ${
             isDark ? 'bg-slate-950 border-blue-900/80' : 'bg-sky-50/60 border-sky-200'
