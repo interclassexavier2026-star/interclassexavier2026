@@ -302,6 +302,33 @@ export const supabaseClearAllTeams = async (): Promise<boolean> => {
 };
 
 /**
+ * Purges all duplicate futsal_fem matches from Supabase database
+ * except the official Ida and Volta match IDs.
+ */
+export const purgeDuplicateFutsalFemMatches = async (): Promise<boolean> => {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    const { error } = await client
+      .from('matches')
+      .delete()
+      .eq('modality', 'futsal_fem')
+      .neq('id', 'match_futsal_fem_ida_official')
+      .neq('id', 'match_futsal_fem_volta_official');
+
+    if (error) {
+      console.warn('Purge duplicate futsal_fem matches warning:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Error purging duplicate futsal_fem matches from Supabase:', err);
+    return false;
+  }
+};
+
+/**
  * Clear all matches from Supabase
  */
 export const supabaseClearAllMatches = async (): Promise<boolean> => {

@@ -8,6 +8,52 @@ const STORAGE_KEYS = {
   USER: 'interclasse_user',
   TEAMS: 'interclasse_teams_v3',
   MATCHES: 'interclasse_matches_v2',
+  DELETED_TEAMS: 'interclasse_deleted_team_ids_v1',
+};
+
+export const getDeletedTeamIds = (): Set<string> => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.DELETED_TEAMS);
+    if (!raw) return new Set<string>();
+    const parsed: string[] = JSON.parse(raw);
+    return new Set(parsed);
+  } catch {
+    return new Set<string>();
+  }
+};
+
+export const markTeamAsDeleted = (teamId: string) => {
+  try {
+    const ids = getDeletedTeamIds();
+    ids.add(teamId);
+    localStorage.setItem(STORAGE_KEYS.DELETED_TEAMS, JSON.stringify(Array.from(ids)));
+  } catch (err) {
+    console.warn('Error saving deleted team id:', err);
+  }
+};
+
+export const unmarkTeamAsDeleted = (teamId: string) => {
+  try {
+    const ids = getDeletedTeamIds();
+    ids.delete(teamId);
+    localStorage.setItem(STORAGE_KEYS.DELETED_TEAMS, JSON.stringify(Array.from(ids)));
+  } catch (err) {
+    console.warn('Error unmarking deleted team id:', err);
+  }
+};
+
+export const clearDeletedTeamIds = () => {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.DELETED_TEAMS);
+  } catch (err) {
+    console.warn('Error clearing deleted team ids:', err);
+  }
+};
+
+export const filterDeletedTeams = (teams: Team[]): Team[] => {
+  const deletedIds = getDeletedTeamIds();
+  if (deletedIds.size === 0) return teams;
+  return teams.filter((t) => !deletedIds.has(t.id));
 };
 
 // Initial Seed Data for the Interclasse (Cleared out per user request)
@@ -66,16 +112,18 @@ export const getStoredTeams = (): Team[] => {
       return t;
     });
 
+    const activeTeams = filterDeletedTeams(normalized);
+
     // 2. Strict rule for Futsal Feminino: Exactly 2 teams (Disputa Direta em Ida e Volta)
-    const femTeams = normalized.filter((t) => t.modality === 'futsal_fem');
+    const femTeams = activeTeams.filter((t) => t.modality === 'futsal_fem');
     if (femTeams.length > 2) {
       const allowedFemIds = new Set(femTeams.slice(0, 2).map((t) => t.id));
-      const cleaned = normalized.filter((t) => t.modality !== 'futsal_fem' || allowedFemIds.has(t.id));
+      const cleaned = activeTeams.filter((t) => t.modality !== 'futsal_fem' || allowedFemIds.has(t.id));
       setStoredTeams(cleaned);
       return cleaned;
     }
 
-    return normalized;
+    return activeTeams;
   } catch {
     return DEFAULT_TEAMS;
   }
@@ -1314,7 +1362,9 @@ export const getStoredMatches = (): Match[] => {
       return sanitized;
     }
 
-    return parsed;
+    const currentTeams = getStoredTeams();
+    const cleanMatches = sanitizeFutsalFemMatches(parsed, currentTeams);
+    return cleanMatches;
   } catch {
     return [];
   }
@@ -1328,11 +1378,9 @@ export const setStoredMatches = (matches: Match[]) => {
 export const generateFutsalFemFinalIdaEVolta = (teams: Team[]): Match[] => {
   const modality = 'futsal_fem';
   const modalityTeams = teams.filter((t) => t.modality === modality);
-  if (modalityTeams.length === 0) return [];
 
   const teamA = modalityTeams[0];
   const teamB = modalityTeams[1] || modalityTeams[0];
-  const timestamp = Date.now();
 
   const getDisplayName = (team?: Team) => {
     if (!team) return 'A definir';
@@ -1341,14 +1389,14 @@ export const generateFutsalFemFinalIdaEVolta = (teams: Team[]): Match[] => {
 
   const matches: Match[] = [
     {
-      id: `match_futsal_fem_ida_${timestamp}`,
+      id: 'match_futsal_fem_ida_official',
       modality,
       roundName: 'Grande Final - Jogo de Ida',
       roundIndex: 1,
       matchNumber: 1,
-      teamAId: teamA.id,
+      teamAId: teamA?.id,
       teamAName: getDisplayName(teamA),
-      teamBId: teamB.id,
+      teamBId: teamB?.id,
       teamBName: getDisplayName(teamB),
       bracketType: 'grand_final',
       date: '14 de Outubro',
@@ -1356,14 +1404,14 @@ export const generateFutsalFemFinalIdaEVolta = (teams: Team[]): Match[] => {
       location: 'Quadra Central',
     },
     {
-      id: `match_futsal_fem_volta_${timestamp}`,
+      id: 'match_futsal_fem_volta_official',
       modality,
       roundName: 'Grande Final - Jogo de Volta',
       roundIndex: 2,
       matchNumber: 2,
-      teamAId: teamB.id,
+      teamAId: teamB?.id,
       teamAName: getDisplayName(teamB),
-      teamBId: teamA.id,
+      teamBId: teamA?.id,
       teamBName: getDisplayName(teamA),
       bracketType: 'grand_final',
       date: '14 de Outubro',
@@ -1373,6 +1421,69 @@ export const generateFutsalFemFinalIdaEVolta = (teams: Team[]): Match[] => {
   ];
 
   return matches;
+};
+
+/**
+ * Ensures futsal_fem matches array contains STRICTLY EXACTLY 2 matches (Jogo de Ida & Jogo de Volta),
+ * purging any duplicate or old matches that accumulated.
+ */
+export const sanitizeFutsalFemMatches = (allMatches: Match[], teams: Team[]): Match[] => {
+  const nonFemMatches = allMatches.filter((m) => m.modality !== 'futsal_fem');
+  const femMatches = allMatches.filter((m) => m.modality === 'futsal_fem');
+
+  if (femMatches.length === 0) {
+    const generated = generateFutsalFemFinalIdaEVolta(teams);
+    return [...nonFemMatches, ...generated];
+  }
+
+  const idaExisting = femMatches.find((m) => m.roundName?.includes('Ida')) || femMatches[0];
+  const voltaExisting = femMatches.find((m) => m.roundName?.includes('Volta')) || femMatches[1] || femMatches[0];
+
+  const femTeams = teams.filter((t) => t.modality === 'futsal_fem');
+  const teamA = femTeams[0];
+  const teamB = femTeams[1] || femTeams[0];
+
+  const getDisplayName = (team?: Team) => (team ? team.name : 'A definir');
+
+  const idaMatch: Match = {
+    id: 'match_futsal_fem_ida_official',
+    modality: 'futsal_fem',
+    roundName: 'Grande Final - Jogo de Ida',
+    roundIndex: 1,
+    matchNumber: 1,
+    teamAId: teamA?.id || idaExisting?.teamAId,
+    teamAName: teamA ? teamA.name : idaExisting?.teamAName || 'A definir',
+    teamBId: teamB?.id || idaExisting?.teamBId,
+    teamBName: teamB ? teamB.name : idaExisting?.teamBName || 'A definir',
+    scoreA: idaExisting?.scoreA,
+    scoreB: idaExisting?.scoreB,
+    winnerId: idaExisting?.winnerId,
+    bracketType: 'grand_final',
+    date: idaExisting?.date || '14 de Outubro',
+    time: idaExisting?.time || '14:00',
+    location: idaExisting?.location || 'Quadra Central',
+  };
+
+  const voltaMatch: Match = {
+    id: 'match_futsal_fem_volta_official',
+    modality: 'futsal_fem',
+    roundName: 'Grande Final - Jogo de Volta',
+    roundIndex: 2,
+    matchNumber: 2,
+    teamAId: teamB?.id || voltaExisting?.teamAId,
+    teamAName: teamB ? teamB.name : voltaExisting?.teamAName || 'A definir',
+    teamBId: teamA?.id || voltaExisting?.teamBId,
+    teamBName: teamA ? teamA.name : voltaExisting?.teamBName || 'A definir',
+    scoreA: voltaExisting?.scoreA,
+    scoreB: voltaExisting?.scoreB,
+    winnerId: voltaExisting?.winnerId,
+    bracketType: 'grand_final',
+    date: voltaExisting?.date || '14 de Outubro',
+    time: voltaExisting?.time || '15:30',
+    location: voltaExisting?.location || 'Quadra Central',
+  };
+
+  return [...nonFemMatches, idaMatch, voltaMatch];
 };
 
 // Automatic Tournament Bracket Generator with dynamic round capacity, clean naming and crossover support

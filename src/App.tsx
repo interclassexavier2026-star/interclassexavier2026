@@ -12,6 +12,11 @@ import {
   generateDoubleEliminationBracket,
   forceSaveAllData,
   clearAllRegisteredTeams,
+  sanitizeFutsalFemMatches,
+  markTeamAsDeleted,
+  unmarkTeamAsDeleted,
+  filterDeletedTeams,
+  clearDeletedTeamIds,
 } from './utils/storage';
 import { getAllImagesFromIndexedDb, saveImageToIndexedDb, imageMemoryCache } from './utils/indexedDbStorage';
 import { CheckCircle2 } from 'lucide-react';
@@ -26,7 +31,7 @@ import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import { CountdownLockScreen } from './components/CountdownLockScreen';
 import { Footer } from './components/Footer';
 import { isSupabaseConfigured, getSupabaseClient } from './utils/supabaseClient';
-import { supabaseFetchTeams, supabaseFetchMatches, supabaseFetchImages, rowToMatch, rowToTeam, supabaseSaveTeam, supabaseDeleteTeam } from './utils/supabaseDb';
+import { supabaseFetchTeams, supabaseFetchMatches, supabaseFetchImages, rowToMatch, rowToTeam, supabaseSaveTeam, supabaseDeleteTeam, purgeDuplicateFutsalFemMatches } from './utils/supabaseDb';
 
 export function App() {
   const [user, setUser] = useState<User | null>(getStoredUser());
@@ -76,15 +81,19 @@ export function App() {
 
     // Hydrate from Supabase on mount if configured
     if (isSupabaseConfigured()) {
+      purgeDuplicateFutsalFemMatches().catch(() => {});
       Promise.all([supabaseFetchTeams(), supabaseFetchMatches(), supabaseFetchImages()])
         .then(([remoteTeams, remoteMatches, remoteImages]) => {
           if (remoteTeams !== null) {
-            setTeams(remoteTeams);
-            setStoredTeams(remoteTeams);
+            const cleanTeams = filterDeletedTeams(remoteTeams);
+            setTeams(cleanTeams);
+            setStoredTeams(cleanTeams);
           }
+          const currentTeams = remoteTeams !== null ? filterDeletedTeams(remoteTeams) : teams;
           if (remoteMatches !== null) {
-            setMatches(remoteMatches);
-            setStoredMatches(remoteMatches);
+            const cleanMatches = sanitizeFutsalFemMatches(remoteMatches, currentTeams);
+            setMatches(cleanMatches);
+            setStoredMatches(cleanMatches);
           }
           if (remoteImages) {
             for (const [id, dataUrl] of Object.entries(remoteImages)) {
@@ -165,6 +174,12 @@ export function App() {
 
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             const updatedTeam = rowToTeam(payload.new);
+            const filtered = filterDeletedTeams([updatedTeam]);
+            if (filtered.length === 0) {
+              // Deleted team received from DB, ignore and retry DB delete
+              supabaseDeleteTeam(updatedTeam.id).catch(() => {});
+              return;
+            }
             setTeams((prevTeams) => {
               const exists = prevTeams.some((t) => t.id === updatedTeam.id);
               let nextTeams: Team[];
@@ -175,8 +190,9 @@ export function App() {
               } else {
                 nextTeams = [...prevTeams, updatedTeam];
               }
-              setStoredTeams(nextTeams);
-              return nextTeams;
+              const cleanNext = filterDeletedTeams(nextTeams);
+              setStoredTeams(cleanNext);
+              return cleanNext;
             });
           } else if (payload.eventType === 'DELETE') {
             const deletedId = payload.old.id;
@@ -196,10 +212,11 @@ export function App() {
     const pollInterval = setInterval(() => {
       supabaseFetchMatches().then((remoteMatches) => {
         if (remoteMatches !== null) {
+          const cleanMatches = sanitizeFutsalFemMatches(remoteMatches, teams);
           setMatches((prevMatches) => {
-            if (JSON.stringify(prevMatches) !== JSON.stringify(remoteMatches)) {
-              setStoredMatches(remoteMatches);
-              return remoteMatches;
+            if (JSON.stringify(prevMatches) !== JSON.stringify(cleanMatches)) {
+              setStoredMatches(cleanMatches);
+              return cleanMatches;
             }
             return prevMatches;
           });
@@ -207,10 +224,11 @@ export function App() {
       });
       supabaseFetchTeams().then((remoteTeams) => {
         if (remoteTeams !== null) {
+          const cleanTeams = filterDeletedTeams(remoteTeams);
           setTeams((prevTeams) => {
-            if (JSON.stringify(prevTeams) !== JSON.stringify(remoteTeams)) {
-              setStoredTeams(remoteTeams);
-              return remoteTeams;
+            if (JSON.stringify(prevTeams) !== JSON.stringify(cleanTeams)) {
+              setStoredTeams(cleanTeams);
+              return cleanTeams;
             }
             return prevTeams;
           });
@@ -274,6 +292,7 @@ export function App() {
 
   // Clear / Wipe all registered teams and matches
   const handleClearAllTeams = async () => {
+    clearDeletedTeamIds();
     await clearAllRegisteredTeams();
     setTeams([]);
     setMatches([]);
@@ -288,6 +307,8 @@ export function App() {
       id: `team_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
       createdDate: new Date().toISOString(),
     };
+
+    unmarkTeamAsDeleted(newTeam.id);
 
     if (newTeam.imageUrl) {
       imageMemoryCache.set(newTeam.id, newTeam.imageUrl);
@@ -318,10 +339,13 @@ export function App() {
     const teamToDelete = teams.find((t) => t.id === teamId);
     if (!teamToDelete) return;
 
-    // 1. Remove from memory cache
+    // 1. Mark as deleted locally so it can NEVER reappear
+    markTeamAsDeleted(teamId);
+
+    // 2. Remove from memory cache
     imageMemoryCache.delete(teamId);
 
-    // 2. Update React state and LocalStorage immediately
+    // 3. Update React state and LocalStorage immediately
     const nextTeams = teams.filter((t) => t.id !== teamId);
     setTeams(nextTeams);
     setStoredTeams(nextTeams);
