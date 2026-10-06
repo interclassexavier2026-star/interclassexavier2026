@@ -11,6 +11,7 @@ import {
   generateAutomaticBracket,
   generateDoubleEliminationBracket,
   forceSaveAllData,
+  clearAllRegisteredTeams,
 } from './utils/storage';
 import { getAllImagesFromIndexedDb, saveImageToIndexedDb, imageMemoryCache } from './utils/indexedDbStorage';
 import { CheckCircle2 } from 'lucide-react';
@@ -25,7 +26,7 @@ import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import { CountdownLockScreen } from './components/CountdownLockScreen';
 import { Footer } from './components/Footer';
 import { isSupabaseConfigured, getSupabaseClient } from './utils/supabaseClient';
-import { supabaseFetchTeams, supabaseFetchMatches, supabaseFetchImages, rowToMatch, rowToTeam } from './utils/supabaseDb';
+import { supabaseFetchTeams, supabaseFetchMatches, supabaseFetchImages, rowToMatch, rowToTeam, supabaseSaveTeam, supabaseDeleteTeam } from './utils/supabaseDb';
 
 export function App() {
   const [user, setUser] = useState<User | null>(getStoredUser());
@@ -77,11 +78,11 @@ export function App() {
     if (isSupabaseConfigured()) {
       Promise.all([supabaseFetchTeams(), supabaseFetchMatches(), supabaseFetchImages()])
         .then(([remoteTeams, remoteMatches, remoteImages]) => {
-          if (remoteTeams && remoteTeams.length > 0) {
+          if (remoteTeams !== null) {
             setTeams(remoteTeams);
             setStoredTeams(remoteTeams);
           }
-          if (remoteMatches && remoteMatches.length > 0) {
+          if (remoteMatches !== null) {
             setMatches(remoteMatches);
             setStoredMatches(remoteMatches);
           }
@@ -191,21 +192,31 @@ export function App() {
         console.log('📡 Status do Canal Realtime (teams):', status);
       });
 
-    // Polling inteligente de backup a cada 5s (garante atualização pública em conexões instáveis)
+    // Polling inteligente de backup a cada 10s (garante sincronia pública sem loops de repetição)
     const pollInterval = setInterval(() => {
       supabaseFetchMatches().then((remoteMatches) => {
-        if (remoteMatches && remoteMatches.length > 0) {
-          setMatches(remoteMatches);
-          setStoredMatches(remoteMatches);
+        if (remoteMatches !== null) {
+          setMatches((prevMatches) => {
+            if (JSON.stringify(prevMatches) !== JSON.stringify(remoteMatches)) {
+              setStoredMatches(remoteMatches);
+              return remoteMatches;
+            }
+            return prevMatches;
+          });
         }
       });
       supabaseFetchTeams().then((remoteTeams) => {
-        if (remoteTeams && remoteTeams.length > 0) {
-          setTeams(remoteTeams);
-          setStoredTeams(remoteTeams);
+        if (remoteTeams !== null) {
+          setTeams((prevTeams) => {
+            if (JSON.stringify(prevTeams) !== JSON.stringify(remoteTeams)) {
+              setStoredTeams(remoteTeams);
+              return remoteTeams;
+            }
+            return prevTeams;
+          });
         }
       });
-    }, 5000);
+    }, 10000);
 
     // Limpeza dos canais ao desmontar
     return () => {
@@ -261,8 +272,17 @@ export function App() {
     setTimeout(() => setToastMessage(null), 5000);
   };
 
+  // Clear / Wipe all registered teams and matches
+  const handleClearAllTeams = async () => {
+    await clearAllRegisteredTeams();
+    setTeams([]);
+    setMatches([]);
+    setToastMessage('✓ Todos os times e confrontos cadastrados foram zerados com sucesso!');
+    setTimeout(() => setToastMessage(null), 5000);
+  };
+
   // Handle Team / Athlete Creation
-  const handleAddTeam = (teamData: Omit<Team, 'id' | 'createdDate'>) => {
+  const handleAddTeam = async (teamData: Omit<Team, 'id' | 'createdDate'>) => {
     const newTeam: Team = {
       ...teamData,
       id: `team_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
@@ -274,41 +294,141 @@ export function App() {
       saveImageToIndexedDb(newTeam.id, newTeam.imageUrl).catch(() => {});
     }
 
-    setTeams((prev) => [...prev, newTeam]);
+    if (isSupabaseConfigured()) {
+      const saved = await supabaseSaveTeam(newTeam);
+      if (!saved) {
+        alert('⚠️ Não foi possível cadastrar a turma no Supabase. Verifique a sua conexão com a internet.');
+        return;
+      }
+    }
+
+    setTeams((prev) => {
+      if (prev.some((t) => t.id === newTeam.id)) return prev;
+      const next = [...prev, newTeam];
+      setStoredTeams(next);
+      return next;
+    });
+
+    setToastMessage(`✓ Equipe "${newTeam.name}" cadastrada com sucesso!`);
+    setTimeout(() => setToastMessage(null), 4000);
   };
 
   // Handle Team Deletion
-  const handleDeleteTeam = (teamId: string) => {
-    setTeams((prev) => prev.filter((t) => t.id !== teamId));
+  const handleDeleteTeam = async (teamId: string) => {
+    const teamToDelete = teams.find((t) => t.id === teamId);
+    if (!teamToDelete) return;
+
+    // 1. Remove from memory cache
+    imageMemoryCache.delete(teamId);
+
+    // 2. Update React state and LocalStorage immediately
+    const nextTeams = teams.filter((t) => t.id !== teamId);
+    setTeams(nextTeams);
+    setStoredTeams(nextTeams);
+
+    // 3. Clean up match references in local state
+    setMatches((prevMatches) => {
+      const nextMatches = prevMatches.map((m) => {
+        let updatedM = { ...m };
+        let changed = false;
+        if (m.teamAId === teamId) {
+          updatedM.teamAId = undefined;
+          updatedM.teamAName = 'A definir';
+          changed = true;
+        }
+        if (m.teamBId === teamId) {
+          updatedM.teamBId = undefined;
+          updatedM.teamBName = 'A definir';
+          changed = true;
+        }
+        if (m.winnerId === teamId) {
+          updatedM.winnerId = undefined;
+          changed = true;
+        }
+        if (m.loserId === teamId) {
+          updatedM.loserId = undefined;
+          changed = true;
+        }
+        return changed ? updatedM : m;
+      });
+      setStoredMatches(nextMatches);
+      return nextMatches;
+    });
+
+    // 4. Perform Supabase DELETE and unbind in background if configured
+    if (isSupabaseConfigured()) {
+      supabaseDeleteTeam(teamId, teamToDelete.imageUrl).then((result) => {
+        if (!result.success) {
+          console.warn('Supabase delete warning:', result.error);
+        }
+      }).catch((err) => {
+        console.error('Error deleting team from Supabase:', err);
+      });
+    }
+
+    setToastMessage(`✓ Equipe "${teamToDelete.name}" excluída com sucesso!`);
+    setTimeout(() => setToastMessage(null), 4000);
   };
 
   // Handle Updating Players Roster for a Team (Futsal & Vôlei)
-  const handleUpdateTeamPlayers = (teamId: string, players: string[]) => {
-    setTeams((prev) =>
-      prev.map((t) => (t.id === teamId ? { ...t, players } : t))
-    );
+  const handleUpdateTeamPlayers = async (teamId: string, players: string[]) => {
+    let updatedTeam: Team | undefined;
+    setTeams((prev) => {
+      const next = prev.map((t) => {
+        if (t.id === teamId) {
+          updatedTeam = { ...t, players };
+          return updatedTeam;
+        }
+        return t;
+      });
+      setStoredTeams(next);
+      return next;
+    });
+
+    if (updatedTeam && isSupabaseConfigured()) {
+      await supabaseSaveTeam(updatedTeam);
+    }
   };
 
   // Handle Updating Team Image / Logo (Futsal, Vôlei Misto, etc.)
-  const handleUpdateTeamImage = (teamId: string, imageUrl?: string) => {
+  const handleUpdateTeamImage = async (teamId: string, imageUrl?: string) => {
     if (imageUrl) {
       imageMemoryCache.set(teamId, imageUrl);
       saveImageToIndexedDb(teamId, imageUrl).catch(() => {});
     }
-    setTeams((prev) =>
-      prev.map((t) => (t.id === teamId ? { ...t, imageUrl } : t))
-    );
+    let updatedTeam: Team | undefined;
+    setTeams((prev) => {
+      const next = prev.map((t) => {
+        if (t.id === teamId) {
+          updatedTeam = { ...t, imageUrl };
+          return updatedTeam;
+        }
+        return t;
+      });
+      setStoredTeams(next);
+      return next;
+    });
+
+    if (updatedTeam && isSupabaseConfigured()) {
+      await supabaseSaveTeam(updatedTeam);
+    }
   };
 
   // Handle fully updating team details (such as playerClass/room, playerName, etc.)
-  const handleUpdateTeam = (updatedTeam: Team) => {
+  const handleUpdateTeam = async (updatedTeam: Team) => {
     if (updatedTeam.imageUrl) {
       imageMemoryCache.set(updatedTeam.id, updatedTeam.imageUrl);
       saveImageToIndexedDb(updatedTeam.id, updatedTeam.imageUrl).catch(() => {});
     }
-    setTeams((prev) =>
-      prev.map((t) => (t.id === updatedTeam.id ? updatedTeam : t))
-    );
+    setTeams((prev) => {
+      const next = prev.map((t) => (t.id === updatedTeam.id ? updatedTeam : t));
+      setStoredTeams(next);
+      return next;
+    });
+
+    if (isSupabaseConfigured()) {
+      await supabaseSaveTeam(updatedTeam);
+    }
 
     const updatedName = updatedTeam.playerName && updatedTeam.playerClass
       ? `${updatedTeam.playerName} (${updatedTeam.playerClass})`
@@ -612,6 +732,7 @@ export function App() {
         onRestoreBackup={handleRestoreBackup}
         onManualSave={handleManualSave}
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+        onClearAllTeams={handleClearAllTeams}
       />
 
       <SupabaseConfigModal

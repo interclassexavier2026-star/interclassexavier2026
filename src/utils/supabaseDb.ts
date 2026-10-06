@@ -204,21 +204,119 @@ export const supabaseSaveTeam = async (team: Team): Promise<boolean> => {
 };
 
 /**
- * Delete team from Supabase
+ * Delete team from Supabase + cleanup match references & media_images
  */
-export const supabaseDeleteTeam = async (teamId: string): Promise<boolean> => {
+export interface DeleteTeamResult {
+  success: boolean;
+  error?: string;
+  isForeignKeyError?: boolean;
+}
+
+/**
+ * Delete team from Supabase + cleanup media/storage + return explicit error status
+ */
+export const supabaseDeleteTeam = async (
+  teamId: string,
+  imageUrl?: string
+): Promise<DeleteTeamResult> => {
+  const client = getSupabaseClient();
+  if (!client) return { success: true };
+
+  try {
+    // 1. Unbind team references from matches table in Supabase so FK constraints never block deletion
+    try {
+      await client.from('matches').update({ team_a_id: null, team_a_name: 'A definir' }).eq('team_a_id', teamId);
+      await client.from('matches').update({ team_b_id: null, team_b_name: 'A definir' }).eq('team_b_id', teamId);
+      await client.from('matches').update({ winner_id: null }).eq('winner_id', teamId);
+      await client.from('matches').update({ loser_id: null }).eq('loser_id', teamId);
+    } catch (fkErr) {
+      console.warn('Supabase match unbind warning:', fkErr);
+    }
+
+    // 2. Storage image cleanup from bucket 'class-images' if present
+    if (imageUrl) {
+      try {
+        const urlParts = imageUrl.split('/class-images/');
+        if (urlParts.length > 1) {
+          const filePath = urlParts[1].split('?')[0];
+          await client.storage.from('class-images').remove([filePath]);
+        }
+      } catch (stErr) {
+        console.warn('Supabase class-images storage removal warning:', stErr);
+      }
+    }
+
+    // 3. Delete media image row from media_images if exists
+    try {
+      await client.from('media_images').delete().eq('id', teamId);
+    } catch (mediaErr) {
+      console.warn('Supabase media_images delete warning:', mediaErr);
+    }
+
+    // 4. Explicit delete on 'teams' table
+    const { error } = await client.from('teams').delete().eq('id', teamId);
+    if (error) {
+      console.error('Supabase team delete error:', error.message);
+      const isFK =
+        error.code === '23503' ||
+        error.message?.toLowerCase().includes('foreign key') ||
+        error.message?.toLowerCase().includes('violates foreign key constraint') ||
+        error.message?.toLowerCase().includes('matches') ||
+        error.message?.toLowerCase().includes('reference') ||
+        error.message?.toLowerCase().includes('constraint');
+
+      return {
+        success: false,
+        error: error.message,
+        isForeignKeyError: isFK,
+      };
+    }
+    return { success: true };
+  } catch (err: any) {
+    console.error('Error deleting team from Supabase:', err);
+    return {
+      success: false,
+      error: err?.message || 'Erro inesperado ao conectar ao Supabase',
+    };
+  }
+};
+
+/**
+ * Clear all teams from Supabase
+ */
+export const supabaseClearAllTeams = async (): Promise<boolean> => {
   const client = getSupabaseClient();
   if (!client) return false;
 
   try {
-    const { error } = await client.from('teams').delete().eq('id', teamId);
+    const { error } = await client.from('teams').delete().neq('id', '___non_existent___');
     if (error) {
-      console.error('Supabase team delete error:', error.message);
+      console.error('Supabase clear teams error:', error.message);
       return false;
     }
     return true;
   } catch (err) {
-    console.error('Error deleting team from Supabase:', err);
+    console.error('Error clearing teams from Supabase:', err);
+    return false;
+  }
+};
+
+/**
+ * Clear all matches from Supabase
+ */
+export const supabaseClearAllMatches = async (): Promise<boolean> => {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    const { error } = await client.from('matches').delete().neq('id', '___non_existent___');
+    if (error) {
+      console.error('Supabase clear matches error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Error clearing matches from Supabase:', err);
     return false;
   }
 };

@@ -78,6 +78,7 @@ export const TeamsSection: React.FC<TeamsSectionProps> = ({
   onGenerateBracket,
   onManualSave,
 }) => {
+  const isAdmin = user?.role === 'admin' || user?.role === 'subadmin';
   const config = MODALITY_CONFIGS[activeModality];
   const filteredTeams = teams.filter((t) => t.modality === activeModality);
   const isDark = theme === 'dark';
@@ -119,6 +120,7 @@ export const TeamsSection: React.FC<TeamsSectionProps> = ({
 
   // Editing Details (name, class/room, color) for an existing team modal
   const [editingDetailsTeam, setEditingDetailsTeam] = useState<Team | null>(null);
+  const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
   const [editName, setEditName] = useState('');
   const [editCaptain, setEditCaptain] = useState('');
   const [editPlayerName, setEditPlayerName] = useState('');
@@ -286,7 +288,7 @@ export const TeamsSection: React.FC<TeamsSectionProps> = ({
           </div>
 
           {/* Admin: Generate Bracket */}
-          {user?.role === 'admin' && (
+          {isAdmin && (
             <div className="flex flex-col sm:flex-row gap-2.5">
               {onManualSave && (
                 <button
@@ -358,7 +360,7 @@ export const TeamsSection: React.FC<TeamsSectionProps> = ({
         </div>
 
         {/* Admin Registration Form or 2-Team Limit Notice for Futsal Feminino */}
-        {user?.role === 'admin' && (
+        {isAdmin && (
           activeModality === 'futsal_fem' && filteredTeams.length >= 2 ? (
             <div className={`border-2 rounded-3xl p-5 shadow-lg transition-colors ${
               isDark ? 'bg-slate-900/90 border-amber-400/40 text-white' : 'bg-amber-50/70 border-amber-300 text-slate-900'
@@ -688,7 +690,7 @@ export const TeamsSection: React.FC<TeamsSectionProps> = ({
               Nenhuma {config.isIndividual ? 'atleta cadastrado' : 'equipe cadastrada'} em {config.label}
             </h3>
             <p className={`text-xs mt-1 max-w-sm mx-auto ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-              {user?.role === 'admin'
+              {isAdmin
                 ? 'Utilize o formulário acima para cadastrar os participantes.'
                 : 'Aguarde a comissão organizadora realizar o cadastro oficial.'}
             </p>
@@ -721,7 +723,7 @@ export const TeamsSection: React.FC<TeamsSectionProps> = ({
                               isDark ? 'border-blue-800' : 'border-sky-200 bg-white'
                             }`}
                           />
-                          {user?.role === 'admin' && (
+                          {isAdmin && (
                             <button
                               type="button"
                               onClick={() => setEditingImageTeam(team)}
@@ -741,7 +743,7 @@ export const TeamsSection: React.FC<TeamsSectionProps> = ({
                           }}
                         >
                           <Shirt className="w-7 h-7 drop-shadow-sm" />
-                          {user?.role === 'admin' && (
+                          {isAdmin && (
                             <button
                               type="button"
                               onClick={() => setEditingImageTeam(team)}
@@ -774,17 +776,25 @@ export const TeamsSection: React.FC<TeamsSectionProps> = ({
                       </div>
                     </div>
 
-                    {user?.role === 'admin' && (
-                      <div className="flex items-center gap-1">
+                    {isAdmin && (
+                      <div className="flex items-center gap-1 z-10">
                         <button
-                          onClick={() => handleOpenEditDetails(team)}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenEditDetails(team);
+                          }}
                           className="p-2 text-amber-500 hover:bg-amber-500/10 rounded-xl transition-colors cursor-pointer"
                           title="Editar"
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => onDeleteTeam(team.id)}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setTeamToDelete(team);
+                          }}
                           className="p-2 text-rose-500 hover:bg-rose-500/10 rounded-xl transition-colors cursor-pointer"
                           title="Excluir"
                         >
@@ -966,6 +976,67 @@ export const TeamsSection: React.FC<TeamsSectionProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Delete Confirmation Modal */}
+      {teamToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in text-slate-900">
+          <div className="bg-white border-2 border-rose-500 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="bg-slate-900 text-white p-5 flex items-center justify-between border-b border-rose-500/40">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-rose-500/20 text-rose-400 rounded-xl">
+                  <Trash2 className="w-5 h-5 text-rose-500" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black text-rose-400 uppercase tracking-widest block">
+                    CONFIRMAÇÃO DE EXCLUSÃO
+                  </span>
+                  <h3 className="text-base font-black font-display uppercase tracking-wide text-white">
+                    Excluir {config.isIndividual ? 'Atleta' : 'Turma'}
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTeamToDelete(null)}
+                className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-sm font-medium text-slate-700 leading-relaxed">
+                Tem certeza de que deseja excluir permanentemente {config.isIndividual ? 'o(a) atleta' : 'a turma'}{' '}
+                <strong className="text-slate-950 font-black uppercase">"{teamToDelete.name}"</strong>?
+              </p>
+              <div className="text-xs text-amber-900 bg-amber-50 border border-amber-300 p-3 rounded-2xl font-medium">
+                ⚠️ Esta ação removerá a turma do sistema e desvinculará quaisquer confrontos e tabelas associadas.
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setTeamToDelete(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-100 uppercase cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = teamToDelete.id;
+                    setTeamToDelete(null);
+                    onDeleteTeam(id);
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-rose-600/20 transition-all hover:scale-105 cursor-pointer"
+                >
+                  Sim, Excluir Agora
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

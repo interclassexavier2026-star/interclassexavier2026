@@ -35,6 +35,7 @@ interface AdminSettingsModalProps {
   onRestoreBackup?: (teams: Team[], matches: Match[]) => void;
   onManualSave?: () => Promise<{ success: boolean; teamsCount: number; imagesCount: number; timestamp: string }>;
   onOpenSupabaseModal?: () => void;
+  onClearAllTeams?: () => Promise<void>;
 }
 
 export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
@@ -49,6 +50,7 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
   onRestoreBackup,
   onManualSave,
   onOpenSupabaseModal,
+  onClearAllTeams,
 }) => {
   const isDark = theme === 'dark';
 
@@ -303,6 +305,24 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
                 <UploadCloud className="w-4 h-4 text-sky-400" />
                 <span>Restaurar Backup</span>
               </button>
+
+              {/* Button 4: Clear All Registered Teams */}
+              {onClearAllTeams && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (confirm('Tem certeza de que deseja remover TODOS os times e confrontos atualmente cadastrados? Essa ação não pode ser desfeita.')) {
+                      await onClearAllTeams();
+                      setSaveStatus('✓ Todos os times e confrontos foram zerados e removidos com sucesso!');
+                      setTimeout(() => setSaveStatus(''), 6000);
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md transition-all hover:scale-105 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4 text-rose-200" />
+                  <span>Zerar Todos os Times</span>
+                </button>
+              )}
             </div>
           </div>
 

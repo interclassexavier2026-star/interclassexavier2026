@@ -2,7 +2,7 @@ import { Team, Match, User, ModalityType } from '../types';
 import { DEFAULT_OFFICIAL_SUBADMINS } from './constants';
 import { EMBLEM_PRESETS } from './emblems';
 import { saveImageToIndexedDb, imageMemoryCache, getAllImagesFromIndexedDb } from './indexedDbStorage';
-import { supabaseSaveTeam, supabaseSaveMatches, supabaseSaveImage } from './supabaseDb';
+import { supabaseSaveTeam, supabaseSaveMatches, supabaseSaveImage, supabaseClearAllTeams, supabaseClearAllMatches } from './supabaseDb';
 
 const STORAGE_KEYS = {
   USER: 'interclasse_user',
@@ -10,316 +10,8 @@ const STORAGE_KEYS = {
   MATCHES: 'interclasse_matches_v2',
 };
 
-// Initial Seed Data for the Interclasse
-const DEFAULT_TEAMS: Team[] = [
-  // Futsal Masculino
-  {
-    id: 'team_fm_1',
-    name: '3º Ano A',
-    modality: 'futsal_masc',
-    captain: 'Enzo Rodrigues',
-    shirtColor: '#0284c7', // Sky Blue
-    imageUrl: EMBLEM_PRESETS[0].url, // Águias
-    players: ['Enzo Rodrigues (C)', 'Lucas Gabriel', 'Matheus Silva', 'Rafael Ramos', 'Guilherme Souza', 'Felipe Santos'],
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'team_fm_2',
-    name: '3º Ano B',
-    modality: 'futsal_masc',
-    captain: 'Arthur Moreira',
-    shirtColor: '#ea580c', // Orange
-    imageUrl: EMBLEM_PRESETS[1].url, // Leões
-    players: ['Arthur Moreira (C)', 'Pedro Henrique', 'Thiago Lima', 'Bruno Dias', 'Gustavo Nogueira', 'Leonardo Pires'],
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'team_fm_3',
-    name: '2º Ano A',
-    modality: 'futsal_masc',
-    captain: 'Davi Lucca',
-    shirtColor: '#16a34a', // Green
-    imageUrl: EMBLEM_PRESETS[7].url, // Dragões
-    players: ['Davi Lucca (C)', 'Henrique Alves', 'Samuel Rocha', 'Breno Carvalho', 'Igor Ferreira'],
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'team_fm_4',
-    name: '1º Ano B',
-    modality: 'futsal_masc',
-    captain: 'Bernardo Costa',
-    shirtColor: '#7c3aed', // Purple
-    imageUrl: EMBLEM_PRESETS[8].url, // Spartanos
-    players: ['Bernardo Costa (C)', 'Caio Martins', 'Vinicius Prado', 'Otavio Ribeiro', 'Daniel Moura'],
-    createdDate: new Date().toISOString(),
-  },
-
-  // Futsal Feminino (Apenas 2 Equipes - Decisão Direta em Ida e Volta)
-  {
-    id: 'team_ff_1',
-    name: '3º Ano B',
-    modality: 'futsal_fem',
-    shirtColor: '#db2777', // Pink
-    imageUrl: EMBLEM_PRESETS[5].url, // Fênix
-    players: ['Camila Fernandes', 'Julia Amaral', 'Isabela Lopes', 'Larissa Vieira', 'Gabriela Castro'],
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'team_ff_2',
-    name: '2º Ano A',
-    modality: 'futsal_fem',
-    shirtColor: '#0284c7', // Sky Blue
-    imageUrl: EMBLEM_PRESETS[3].url, // Tubarões
-    players: ['Mariana Duarte', 'Sofia Martins', 'Ana Clara Lima', 'Beatriz Pires', 'Manuela Gomes'],
-    createdDate: new Date().toISOString(),
-  },
-
-  // Vôlei Misto
-  {
-    id: 'team_vm_1',
-    name: '3º Ano A',
-    modality: 'volei_misto',
-    captain: 'Gabriel Lima',
-    shirtColor: '#2563eb', // Royal Blue
-    imageUrl: EMBLEM_PRESETS[6].url, // Guerreiros
-    players: ['Gabriel Lima (C)', 'Ana Beatriz', 'Lucas Andrade', 'Fernanda Souza', 'Rodrigo Paiva', 'Leticia Silva'],
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'team_vm_2',
-    name: '3º Ano B',
-    modality: 'volei_misto',
-    captain: 'Larissa Santos',
-    shirtColor: '#d97706', // Amber-600
-    imageUrl: EMBLEM_PRESETS[1].url, // Leões
-    players: ['Larissa Santos (C)', 'Pedro Afonso', 'Mariana Neves', 'Joao Vitor', 'Clara Meireles', 'Nicolas Faria'],
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'team_vm_3',
-    name: '2º Ano B',
-    modality: 'volei_misto',
-    captain: 'Matheus Ortiz',
-    shirtColor: '#059669', // Emerald
-    imageUrl: EMBLEM_PRESETS[7].url, // Dragões
-    players: ['Matheus Ortiz (C)', 'Bianca Miranda', 'Felipe Prado', 'Lorena Silveira', 'Danilo Xavier', 'Jessica Couto'],
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'team_vm_4',
-    name: '1º Ano A',
-    modality: 'volei_misto',
-    captain: 'Carolina Rezende',
-    shirtColor: '#9333ea', // Purple
-    imageUrl: EMBLEM_PRESETS[2].url, // Panteras
-    players: ['Carolina Rezende (C)', 'Enzo Ferrari', 'Giovanna Lima', 'Arthur Bueno', 'Victoria Ramos', 'Tales Cunha'],
-    createdDate: new Date().toISOString(),
-  },
-
-  // Tênis de Mesa Masculino (Atleta Individual)
-  {
-    id: 'player_tm_m1',
-    name: 'Lucas Mendes',
-    playerName: 'Lucas Mendes',
-    playerClass: '3º Ano A',
-    modality: 'tenis_mesa_masc',
-    shirtColor: '#0284c7',
-    imageUrl: EMBLEM_PRESETS[4].url,
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'player_tm_m2',
-    name: 'Gabriel Barbosa',
-    playerName: 'Gabriel Barbosa',
-    playerClass: '3º Ano B',
-    modality: 'tenis_mesa_masc',
-    shirtColor: '#ea580c',
-    imageUrl: EMBLEM_PRESETS[1].url,
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'player_tm_m3',
-    name: 'Matheus Vieira',
-    playerName: 'Matheus Vieira',
-    playerClass: '2º Ano A',
-    modality: 'tenis_mesa_masc',
-    shirtColor: '#16a34a',
-    imageUrl: EMBLEM_PRESETS[7].url,
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'player_tm_m4',
-    name: 'Leonardo Toledo',
-    playerName: 'Leonardo Toledo',
-    playerClass: '1º Ano B',
-    modality: 'tenis_mesa_masc',
-    shirtColor: '#7c3aed',
-    imageUrl: EMBLEM_PRESETS[8].url,
-    createdDate: new Date().toISOString(),
-  },
-
-  // Tênis de Mesa Feminino (Atleta Individual)
-  {
-    id: 'player_tm_f1',
-    name: 'Larissa Oliveira',
-    playerName: 'Larissa Oliveira',
-    playerClass: '3º Ano B',
-    modality: 'tenis_mesa_fem',
-    shirtColor: '#db2777',
-    imageUrl: EMBLEM_PRESETS[5].url,
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'player_tm_f2',
-    name: 'Beatriz Costa',
-    playerName: 'Beatriz Costa',
-    playerClass: '2º Ano A',
-    modality: 'tenis_mesa_fem',
-    shirtColor: '#0284c7',
-    imageUrl: EMBLEM_PRESETS[3].url,
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'player_tm_f3',
-    name: 'Sofia Rocha',
-    playerName: 'Sofia Rocha',
-    playerClass: '1º Ano B',
-    modality: 'tenis_mesa_fem',
-    shirtColor: '#f59e0b',
-    imageUrl: EMBLEM_PRESETS[4].url,
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'player_tm_f4',
-    name: 'Manuela Alencar',
-    playerName: 'Manuela Alencar',
-    playerClass: '3º Ano A',
-    modality: 'tenis_mesa_fem',
-    shirtColor: '#10b981',
-    imageUrl: EMBLEM_PRESETS[7].url,
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'player_tm_f5',
-    name: 'Amanda Silva',
-    playerName: 'Amanda Silva',
-    playerClass: '1º Ano A',
-    modality: 'tenis_mesa_fem',
-    shirtColor: '#ec4899',
-    imageUrl: EMBLEM_PRESETS[2].url,
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'player_tm_f6',
-    name: 'Camila Santos',
-    playerName: 'Camila Santos',
-    playerClass: '1º Ano C',
-    modality: 'tenis_mesa_fem',
-    shirtColor: '#84cc16',
-    imageUrl: EMBLEM_PRESETS[0].url,
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'player_tm_f7',
-    name: 'Gabriela Souza',
-    playerName: 'Gabriela Souza',
-    playerClass: '2º Ano B',
-    modality: 'tenis_mesa_fem',
-    shirtColor: '#06b6d4',
-    imageUrl: EMBLEM_PRESETS[6].url,
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'player_tm_f8',
-    name: 'Mariana Lima',
-    playerName: 'Mariana Lima',
-    playerClass: '2º Ano C',
-    modality: 'tenis_mesa_fem',
-    shirtColor: '#f43f5e',
-    imageUrl: EMBLEM_PRESETS[1].url,
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'player_tm_f9',
-    name: 'Letícia Rocha',
-    playerName: 'Letícia Rocha',
-    playerClass: '3º Ano C',
-    modality: 'tenis_mesa_fem',
-    shirtColor: '#eab308',
-    imageUrl: EMBLEM_PRESETS[5].url,
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'player_tm_f10',
-    name: 'Ana Clara',
-    playerName: 'Ana Clara',
-    playerClass: '1º Ano D',
-    modality: 'tenis_mesa_fem',
-    shirtColor: '#a855f7',
-    imageUrl: EMBLEM_PRESETS[3].url,
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'player_tm_f11',
-    name: 'Júlia Ramos',
-    playerName: 'Júlia Ramos',
-    playerClass: '2º Ano D',
-    modality: 'tenis_mesa_fem',
-    shirtColor: '#10b981',
-    imageUrl: EMBLEM_PRESETS[8].url,
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'player_tm_f12',
-    name: 'Isabela Pereira',
-    playerName: 'Isabela Pereira',
-    playerClass: '3º Ano D',
-    modality: 'tenis_mesa_fem',
-    shirtColor: '#6366f1',
-    imageUrl: EMBLEM_PRESETS[4].url,
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'player_tm_f13',
-    name: 'Rafaela Borges',
-    playerName: 'Rafaela Borges',
-    playerClass: '1º Ano B',
-    modality: 'tenis_mesa_fem',
-    shirtColor: '#14b8a6',
-    imageUrl: EMBLEM_PRESETS[7].url,
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'player_tm_f14',
-    name: 'Yasmin Barbosa',
-    playerName: 'Yasmin Barbosa',
-    playerClass: '2º Ano A',
-    modality: 'tenis_mesa_fem',
-    shirtColor: '#f97316',
-    imageUrl: EMBLEM_PRESETS[6].url,
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'player_tm_f15',
-    name: 'Carolina Dias',
-    playerName: 'Carolina Dias',
-    playerClass: '3º Ano B',
-    modality: 'tenis_mesa_fem',
-    shirtColor: '#3b82f6',
-    imageUrl: EMBLEM_PRESETS[0].url,
-    createdDate: new Date().toISOString(),
-  },
-  {
-    id: 'player_tm_f16',
-    name: 'Helena Rezende',
-    playerName: 'Helena Rezende',
-    playerClass: '1º Ano C',
-    modality: 'tenis_mesa_fem',
-    shirtColor: '#6b7280',
-    imageUrl: EMBLEM_PRESETS[2].url,
-    createdDate: new Date().toISOString(),
-  },
-];
+// Initial Seed Data for the Interclasse (Cleared out per user request)
+const DEFAULT_TEAMS: Team[] = [];
 
 export const getStoredUser = (): User | null => {
   try {
@@ -390,15 +82,13 @@ export const getStoredTeams = (): Team[] => {
 };
 
 export const setStoredTeams = (teams: Team[]) => {
-  // 1. Immediately cache and persist all images to high-capacity IndexedDB & Supabase
+  // 1. Immediately cache and persist images to high-capacity IndexedDB memory cache
   if (typeof window !== 'undefined') {
     teams.forEach((t) => {
       if (t.imageUrl && t.imageUrl.length > 0 && !t.imageUrl.startsWith('idb://')) {
         imageMemoryCache.set(t.id, t.imageUrl);
         saveImageToIndexedDb(t.id, t.imageUrl).catch(() => {});
-        supabaseSaveImage(t.id, t.imageUrl).catch(() => {});
       }
-      supabaseSaveTeam(t).catch(() => {});
     });
   }
 
@@ -429,14 +119,16 @@ export const setStoredTeams = (teams: Team[]) => {
  */
 export const forceSaveAllData = async (teams: Team[], matches: Match[], user?: User | null) => {
   let imagesSavedCount = 0;
-  // 1. Flush all images to IndexedDB and cache
+  // 1. Flush all images to IndexedDB, cache and Supabase
   if (typeof window !== 'undefined') {
     for (const t of teams) {
       if (t.imageUrl && t.imageUrl.length > 0 && !t.imageUrl.startsWith('idb://')) {
         imageMemoryCache.set(t.id, t.imageUrl);
         await saveImageToIndexedDb(t.id, t.imageUrl);
+        supabaseSaveImage(t.id, t.imageUrl).catch(() => {});
         imagesSavedCount++;
       }
+      supabaseSaveTeam(t).catch(() => {});
     }
   }
 
@@ -445,6 +137,9 @@ export const forceSaveAllData = async (teams: Team[], matches: Match[], user?: U
 
   // 3. Persist matches
   setStoredMatches(matches);
+  if (matches.length > 0) {
+    supabaseSaveMatches(matches).catch(() => {});
+  }
 
   // 4. Persist user if logged in
   if (user) {
@@ -1627,7 +1322,6 @@ export const getStoredMatches = (): Match[] => {
 
 export const setStoredMatches = (matches: Match[]) => {
   localStorage.setItem(STORAGE_KEYS.MATCHES, JSON.stringify(matches));
-  supabaseSaveMatches(matches).catch(() => {});
 };
 
 // Final Ida e Volta Generator for Futsal Feminino (2 Equipes Finalistas)
@@ -1867,4 +1561,19 @@ export const generateAutomaticBracket = (modality: ModalityType, teams: Team[]):
   const allGenerated: Match[] = [];
   roundsMatches.forEach((rm) => allGenerated.push(...rm));
   return allGenerated;
+};
+
+export const clearAllRegisteredTeams = async (): Promise<boolean> => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.TEAMS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.MATCHES, JSON.stringify([]));
+    localStorage.removeItem('interclasse_teams');
+    localStorage.removeItem('interclasse_matches');
+    await supabaseClearAllTeams();
+    await supabaseClearAllMatches();
+    return true;
+  } catch (err) {
+    console.error('Error clearing registered teams', err);
+    return false;
+  }
 };
