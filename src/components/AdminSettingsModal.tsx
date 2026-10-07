@@ -223,14 +223,14 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
                 <div>
                   <div className="flex items-center gap-2">
                     <h4 className={`text-sm font-black uppercase font-display ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                      Armazenamento, Salvamento & Backup
+                      Armazenamento Global & Servidor JSON
                     </h4>
                     <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                      IndexedDB Ativo
+                      Servidor Ativo
                     </span>
                   </div>
                   <p className={`text-xs mt-1 leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                    Todas as imagens, equipes, elencos e confrontos estão seguros no seu navegador. Use os botões abaixo para forçar o salvamento imediato ou baixar um arquivo de backup completo com todas as fotos.
+                    Todas as equipes, fotos e confrontos são salvos no servidor (JSON compartilhado) para que <strong>todos os visitantes do site hospedado vejam as mesmas informações</strong> em tempo real.
                   </p>
                 </div>
               </div>

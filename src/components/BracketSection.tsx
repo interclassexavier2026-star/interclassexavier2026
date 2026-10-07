@@ -4,6 +4,7 @@ import { MODALITY_CONFIGS } from '../utils/constants';
 import { getFutsalFemFinalSummary } from '../utils/futsalFemUtils';
 import { MatchupConfigModal } from './MatchupConfigModal';
 import { downloadBackupJson, restoreBackupFromJson } from '../utils/jsonBackup';
+import confetti from 'canvas-confetti';
 import {
   Trophy,
   Zap,
@@ -391,6 +392,50 @@ export const BracketSection: React.FC<BracketSectionProps> = ({
     );
     return finalMatch && finalMatch.winnerId ? teams.find((t) => t.id === finalMatch.winnerId) : null;
   }, [filteredMatches, activeModality, maxRoundIndex, teams, futsalFemSummary]);
+
+  // Champion celebration animation with multi-burst confetti
+  React.useEffect(() => {
+    if (championTeam) {
+      try {
+        confetti({
+          particleCount: 110,
+          spread: 80,
+          origin: { y: 0.6 },
+          colors: ['#f59e0b', '#fbbf24', '#10b981', '#3b82f6', '#ec4899', '#ffffff'],
+        });
+        const timer1 = setTimeout(() => {
+          confetti({
+            particleCount: 70,
+            angle: 60,
+            spread: 55,
+            origin: { x: 0 },
+            colors: ['#f59e0b', '#fbbf24', '#ffffff'],
+          });
+          confetti({
+            particleCount: 70,
+            angle: 120,
+            spread: 55,
+            origin: { x: 1 },
+            colors: ['#f59e0b', '#fbbf24', '#ffffff'],
+          });
+        }, 350);
+        return () => clearTimeout(timer1);
+      } catch (err) {
+        console.warn('Confetti animation error:', err);
+      }
+    }
+  }, [championTeam?.id]);
+
+  const handleFireConfetti = () => {
+    try {
+      confetti({
+        particleCount: 150,
+        spread: 100,
+        origin: { y: 0.5 },
+        colors: ['#f59e0b', '#fbbf24', '#10b981', '#3b82f6', '#ec4899', '#ffffff'],
+      });
+    } catch {}
+  };
 
   // Render individual match card with evident photo and classroom
   const renderMatchCardInLine = (match: Match, isFinal = false) => {
@@ -836,38 +881,50 @@ export const BracketSection: React.FC<BracketSectionProps> = ({
 
             {/* Champion Banner if Final has a winner (Hidden if filtering is active for clean visual layout) */}
             {championTeam && !selectedTeamId && !selectedRoom && (
-              <div className="max-w-md mx-auto mb-6 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 p-4 rounded-2xl shadow-xl border-2 border-yellow-200 text-center animate-fade-in">
+              <div className="max-w-md mx-auto mb-6 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 p-5 rounded-3xl shadow-2xl border-4 border-yellow-200 text-center animate-fade-in relative overflow-hidden ring-4 ring-amber-400/40">
                 <div className="flex items-center justify-center gap-1.5 text-xs font-black uppercase tracking-wider mb-2">
-                  <Crown className="w-5 h-5 text-slate-950 animate-bounce" />
-                  <span>GRANDE CAMPEÃO DO TORNEIO!</span>
+                  <Crown className="w-6 h-6 text-slate-950 animate-bounce" />
+                  <span className="text-sm font-black tracking-wide">🏆 GRANDE CAMPEÃO DO TORNEIO! 🏆</span>
+                  <Sparkles className="w-5 h-5 text-amber-900 animate-spin" />
                 </div>
 
-                <div className="my-2 flex justify-center">
+                <div className="my-3 flex justify-center">
                   {championTeam.imageUrl ? (
                     <img
                       src={championTeam.imageUrl}
                       alt={championTeam.name}
-                      className="w-16 h-16 rounded-2xl object-cover border-2 border-slate-950 shadow-xl bg-white"
+                      className="w-20 h-20 rounded-2xl object-cover border-4 border-slate-950 shadow-2xl bg-white transform hover:scale-110 transition-transform"
                     />
                   ) : (
                     <div
-                      className="w-16 h-16 rounded-2xl border-2 border-slate-950 flex items-center justify-center text-white shadow-xl"
+                      className="w-20 h-20 rounded-2xl border-4 border-slate-950 flex items-center justify-center text-white shadow-2xl transform hover:scale-110 transition-transform"
                       style={{ backgroundColor: championTeam.shirtColor }}
                     >
-                      <Shirt className="w-8 h-8 drop-shadow" />
+                      <Shirt className="w-10 h-10 drop-shadow" />
                     </div>
                   )}
                 </div>
 
-                <span className="text-xl font-black font-display uppercase block tracking-tight">
+                <span className="text-2xl font-black font-display uppercase block tracking-tight text-slate-950 drop-shadow-sm">
                   {championTeam.playerName || championTeam.name}
                 </span>
 
-                <div className="mt-1 flex justify-center">
-                  <span className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full bg-slate-950 text-amber-300 text-xs font-black uppercase tracking-wider shadow">
-                    <School className="w-3.5 h-3.5" />
-                    SALA: {championTeam.playerClass || championTeam.name}
+                <div className="mt-2 flex justify-center">
+                  <span className="inline-flex items-center gap-1 px-3.5 py-1 rounded-full bg-slate-950 text-amber-300 text-xs font-black uppercase tracking-wider shadow-lg">
+                    <School className="w-4 h-4" />
+                    SALA / TURMA: {championTeam.playerClass || championTeam.name}
                   </span>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-amber-600/30 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={handleFireConfetti}
+                    className="px-4 py-2 bg-slate-950 hover:bg-slate-900 text-amber-300 text-xs font-black uppercase tracking-wider rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2 cursor-pointer"
+                  >
+                    <Sparkles className="w-4 h-4 text-yellow-400" />
+                    <span>🎉 Comemorar com Confetes!</span>
+                  </button>
                 </div>
               </div>
             )}

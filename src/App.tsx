@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ModalityType, Team, Match, User } from './types';
 import { COUNTDOWN_TARGET } from './utils/constants';
 import {
@@ -19,7 +19,12 @@ import {
   clearDeletedTeamIds,
 } from './utils/storage';
 import { getAllImagesFromIndexedDb, saveImageToIndexedDb, imageMemoryCache } from './utils/indexedDbStorage';
-import { CheckCircle2 } from 'lucide-react';
+import {
+  fetchSharedTournamentData,
+  saveSharedTournamentData,
+  deleteSharedTeam,
+} from './utils/apiSync';
+import { CheckCircle2, Globe } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { HeroSection } from './components/HeroSection';
 import { TeamsSection } from './components/TeamsSection';
@@ -57,6 +62,9 @@ export function App() {
 
   const [teams, setTeams] = useState<Team[]>(getStoredTeams());
   const [matches, setMatches] = useState<Match[]>(getStoredMatches());
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const lastSyncTimeRef = useRef<number>(0);
+  const isInitialLoadDoneRef = useRef<boolean>(false);
 
   // Hydrate high-capacity images from IndexedDB on mount
   useEffect(() => {
@@ -75,6 +83,83 @@ export function App() {
       console.warn('Could not read IndexedDB image store', err);
     });
   }, []);
+
+  // Sync with Server JSON Database (/api/data) on mount and background live polling
+  useEffect(() => {
+    let isMounted = true;
+
+    const performSync = async (isFirstLoad = false) => {
+      try {
+        const remoteData = await fetchSharedTournamentData();
+        if (!isMounted || !remoteData) return;
+
+        // If server has newer data, apply to state and localStorage
+        if (remoteData.lastUpdated > lastSyncTimeRef.current || isFirstLoad) {
+          if (remoteData.teams && Array.isArray(remoteData.teams) && remoteData.teams.length > 0) {
+            const cleanTeams = filterDeletedTeams(remoteData.teams);
+            setTeams(cleanTeams);
+            setStoredTeams(cleanTeams);
+
+            // Hydrate images to IndexedDB
+            cleanTeams.forEach((t) => {
+              if (t.imageUrl && !t.imageUrl.startsWith('idb://')) {
+                imageMemoryCache.set(t.id, t.imageUrl);
+                saveImageToIndexedDb(t.id, t.imageUrl).catch(() => {});
+              }
+            });
+
+            if (remoteData.matches && Array.isArray(remoteData.matches)) {
+              const cleanMatches = sanitizeFutsalFemMatches(remoteData.matches, cleanTeams);
+              setMatches(cleanMatches);
+              setStoredMatches(cleanMatches);
+            }
+
+            lastSyncTimeRef.current = remoteData.lastUpdated;
+          } else if (isFirstLoad && teams.length > 0) {
+            // Server was empty on first load but local client has teams: push to server
+            setIsSyncing(true);
+            saveSharedTournamentData(teams, matches).then((res) => {
+              if (res.lastUpdated) {
+                lastSyncTimeRef.current = res.lastUpdated;
+              }
+            }).finally(() => {
+              if (isMounted) setIsSyncing(false);
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Sync tick error:', err);
+      }
+    };
+
+    // First load sync
+    performSync(true).then(() => {
+      isInitialLoadDoneRef.current = true;
+    });
+
+    // Polling interval every 3.5 seconds so all visitors see live updates without F5
+    const syncInterval = setInterval(() => {
+      performSync(false);
+    }, 3500);
+
+    return () => {
+      isMounted = false;
+      clearInterval(syncInterval);
+    };
+  }, []);
+
+  // Helper to persist both locally and push to the server JSON database
+  const syncToServer = async (newTeams: Team[], newMatches: Match[]) => {
+    setIsSyncing(true);
+    try {
+      const res = await saveSharedTournamentData(newTeams, newMatches);
+      if (res.lastUpdated) {
+        lastSyncTimeRef.current = res.lastUpdated;
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // Countdown lock state: Lock all visitors until 14/10/2026 at 06:45 AM
   const [isUnlockedByTime, setIsUnlockedByTime] = useState<boolean>(
@@ -107,19 +192,22 @@ export function App() {
   // Toast notification for user confirmation
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Manual save of all teams, images, and matches to persistent stores (JSON / LocalStorage)
+  // Manual save of all teams, images, and matches to persistent stores and Server JSON
   const handleManualSave = async () => {
+    setIsSyncing(true);
     const res = await forceSaveAllData(teams, matches, user);
-    setToastMessage(`✓ Todas as ${res.teamsCount} equipes e fotos foram salvas com sucesso no seu dispositivo!`);
+    await syncToServer(teams, matches);
+    setToastMessage(`✓ Salvo com sucesso no site hospedado (JSON) para todos os visitantes verem!`);
     setTimeout(() => setToastMessage(null), 4500);
     return res;
   };
 
   // Restore complete backup
-  const handleRestoreBackup = (newTeams: Team[], newMatches: Match[]) => {
+  const handleRestoreBackup = async (newTeams: Team[], newMatches: Match[]) => {
     setTeams(newTeams);
     setMatches(newMatches);
-    setToastMessage(`✓ Backup completo restaurado com sucesso! (${newTeams.length} equipes carregadas)`);
+    await syncToServer(newTeams, newMatches);
+    setToastMessage(`✓ Backup completo restaurado e publicado no site com sucesso! (${newTeams.length} equipes)`);
     setTimeout(() => setToastMessage(null), 5000);
   };
 
@@ -129,7 +217,8 @@ export function App() {
     await clearAllRegisteredTeams();
     setTeams([]);
     setMatches([]);
-    setToastMessage('✓ Todos os times e confrontos cadastrados foram zerados com sucesso!');
+    await syncToServer([], []);
+    setToastMessage('✓ Todos os times e confrontos foram zerados no site com sucesso!');
     setTimeout(() => setToastMessage(null), 5000);
   };
 
@@ -148,14 +237,14 @@ export function App() {
       saveImageToIndexedDb(newTeam.id, newTeam.imageUrl).catch(() => {});
     }
 
-    setTeams((prev) => {
-      if (prev.some((t) => t.id === newTeam.id)) return prev;
-      const next = [...prev, newTeam];
-      setStoredTeams(next);
-      return next;
-    });
+    const nextTeams = [...teams.filter((t) => t.id !== newTeam.id), newTeam];
+    setTeams(nextTeams);
+    setStoredTeams(nextTeams);
 
-    setToastMessage(`✓ Equipe "${newTeam.name}" cadastrada com sucesso!`);
+    // Save to shared server JSON
+    await syncToServer(nextTeams, matches);
+
+    setToastMessage(`✓ Equipe "${newTeam.name}" cadastrada e salva no site hospedado!`);
     setTimeout(() => setToastMessage(null), 4000);
   };
 
@@ -175,51 +264,53 @@ export function App() {
     setTeams(nextTeams);
     setStoredTeams(nextTeams);
 
-    // 4. Clean up match references in local state
-    setMatches((prevMatches) => {
-      const nextMatches = prevMatches.map((m) => {
-        let updatedM = { ...m };
-        let changed = false;
-        if (m.teamAId === teamId) {
-          updatedM.teamAId = undefined;
-          updatedM.teamAName = 'A definir';
-          changed = true;
-        }
-        if (m.teamBId === teamId) {
-          updatedM.teamBId = undefined;
-          updatedM.teamBName = 'A definir';
-          changed = true;
-        }
-        if (m.winnerId === teamId) {
-          updatedM.winnerId = undefined;
-          changed = true;
-        }
-        if (m.loserId === teamId) {
-          updatedM.loserId = undefined;
-          changed = true;
-        }
-        return changed ? updatedM : m;
-      });
-      setStoredMatches(nextMatches);
-      return nextMatches;
+    // 4. Clean up match references
+    const nextMatches = matches.map((m) => {
+      let updatedM = { ...m };
+      let changed = false;
+      if (m.teamAId === teamId) {
+        updatedM.teamAId = undefined;
+        updatedM.teamAName = 'A definir';
+        changed = true;
+      }
+      if (m.teamBId === teamId) {
+        updatedM.teamBId = undefined;
+        updatedM.teamBName = 'A definir';
+        changed = true;
+      }
+      if (m.winnerId === teamId) {
+        updatedM.winnerId = undefined;
+        changed = true;
+      }
+      if (m.loserId === teamId) {
+        updatedM.loserId = undefined;
+        changed = true;
+      }
+      return changed ? updatedM : m;
     });
 
-    setToastMessage(`✓ Equipe "${teamToDelete.name}" excluída com sucesso!`);
+    setMatches(nextMatches);
+    setStoredMatches(nextMatches);
+
+    // 5. Delete on server JSON and push updated list
+    deleteSharedTeam(teamId).catch(() => {});
+    await syncToServer(nextTeams, nextMatches);
+
+    setToastMessage(`✓ Equipe "${teamToDelete.name}" excluída com sucesso do site!`);
     setTimeout(() => setToastMessage(null), 4000);
   };
 
   // Handle Updating Players Roster for a Team (Futsal & Vôlei)
   const handleUpdateTeamPlayers = async (teamId: string, players: string[]) => {
-    setTeams((prev) => {
-      const next = prev.map((t) => {
-        if (t.id === teamId) {
-          return { ...t, players };
-        }
-        return t;
-      });
-      setStoredTeams(next);
-      return next;
+    const nextTeams = teams.map((t) => {
+      if (t.id === teamId) {
+        return { ...t, players };
+      }
+      return t;
     });
+    setTeams(nextTeams);
+    setStoredTeams(nextTeams);
+    await syncToServer(nextTeams, matches);
   };
 
   // Handle Updating Team Image / Logo (Futsal, Vôlei Misto, etc.)
@@ -228,16 +319,15 @@ export function App() {
       imageMemoryCache.set(teamId, imageUrl);
       saveImageToIndexedDb(teamId, imageUrl).catch(() => {});
     }
-    setTeams((prev) => {
-      const next = prev.map((t) => {
-        if (t.id === teamId) {
-          return { ...t, imageUrl };
-        }
-        return t;
-      });
-      setStoredTeams(next);
-      return next;
+    const nextTeams = teams.map((t) => {
+      if (t.id === teamId) {
+        return { ...t, imageUrl };
+      }
+      return t;
     });
+    setTeams(nextTeams);
+    setStoredTeams(nextTeams);
+    await syncToServer(nextTeams, matches);
   };
 
   // Handle fully updating team details (such as playerClass/room, playerName, etc.)
@@ -246,33 +336,33 @@ export function App() {
       imageMemoryCache.set(updatedTeam.id, updatedTeam.imageUrl);
       saveImageToIndexedDb(updatedTeam.id, updatedTeam.imageUrl).catch(() => {});
     }
-    setTeams((prev) => {
-      const next = prev.map((t) => (t.id === updatedTeam.id ? updatedTeam : t));
-      setStoredTeams(next);
-      return next;
-    });
+    const nextTeams = teams.map((t) => (t.id === updatedTeam.id ? updatedTeam : t));
+    setTeams(nextTeams);
+    setStoredTeams(nextTeams);
 
     const updatedName = updatedTeam.playerName && updatedTeam.playerClass
       ? `${updatedTeam.playerName} (${updatedTeam.playerClass})`
       : updatedTeam.name;
 
-    setMatches((prevMatches) =>
-      prevMatches.map((m) => {
-        let updatedMatch = { ...m };
-        let changed = false;
+    const nextMatches = matches.map((m) => {
+      let updatedMatch = { ...m };
+      let changed = false;
 
-        if (m.teamAId === updatedTeam.id) {
-          updatedMatch.teamAName = updatedName;
-          changed = true;
-        }
-        if (m.teamBId === updatedTeam.id) {
-          updatedMatch.teamBName = updatedName;
-          changed = true;
-        }
+      if (m.teamAId === updatedTeam.id) {
+        updatedMatch.teamAName = updatedName;
+        changed = true;
+      }
+      if (m.teamBId === updatedTeam.id) {
+        updatedMatch.teamBName = updatedName;
+        changed = true;
+      }
 
-        return changed ? updatedMatch : m;
-      })
-    );
+      return changed ? updatedMatch : m;
+    });
+
+    setMatches(nextMatches);
+    setStoredMatches(nextMatches);
+    await syncToServer(nextTeams, nextMatches);
   };
 
   // Handle Automatic Bracket Generation for activeModality (Normal Knockout)
@@ -290,14 +380,13 @@ export function App() {
       newModalityMatches = generateAutomaticBracket(modality, teams);
     }
 
-    setMatches((prev) => {
-      const filtered = prev.filter((m) => m.modality !== modality);
-      const combined = [...filtered, ...newModalityMatches];
-      setStoredMatches(combined);
-      return combined;
-    });
+    const filtered = matches.filter((m) => m.modality !== modality);
+    const combined = [...filtered, ...newModalityMatches];
+    setMatches(combined);
+    setStoredMatches(combined);
+    syncToServer(teams, combined);
 
-    setToastMessage(`✓ Chaveamento de ${modality.replace('_', ' ').toUpperCase()} gerado com sucesso!`);
+    setToastMessage(`✓ Chaveamento de ${modality.replace('_', ' ').toUpperCase()} gerado e salvo no site!`);
     setTimeout(() => setToastMessage(null), 4000);
   };
 
@@ -305,48 +394,48 @@ export function App() {
   const handleUpdateMatches = (newMatches: Match[]) => {
     setMatches(newMatches);
     setStoredMatches(newMatches);
+    syncToServer(teams, newMatches);
   };
 
   // Handle match score updates from BracketSection
   const handleUpdateMatchScore = (matchId: string, scoreA: number, scoreB: number, winnerId?: string) => {
-    setMatches((prev) => {
-      const updated = prev.map((m) => {
-        if (m.id === matchId) {
-          return {
-            ...m,
-            scoreA,
-            scoreB,
-            winnerId,
-          };
-        }
-        return m;
-      });
+    const updated = matches.map((m) => {
+      if (m.id === matchId) {
+        return {
+          ...m,
+          scoreA,
+          scoreB,
+          winnerId,
+        };
+      }
+      return m;
+    });
 
-      // Propagate winner to next match if applicable
-      const match = updated.find((m) => m.id === matchId);
-      if (match && match.nextMatchId && match.winnerId && match.winnerId !== 'BYE') {
-        const nextMatch = updated.find((m) => m.id === match.nextMatchId);
-        if (nextMatch) {
-          const winnerTeam = teams.find((t) => t.id === match.winnerId);
-          const winnerName = winnerTeam
-            ? (winnerTeam.playerName && winnerTeam.playerClass
-                ? `${winnerTeam.playerName} (${winnerTeam.playerClass})`
-                : winnerTeam.name)
-            : 'Vencedor anterior';
+    // Propagate winner to next match if applicable
+    const match = updated.find((m) => m.id === matchId);
+    if (match && match.nextMatchId && match.winnerId && match.winnerId !== 'BYE') {
+      const nextMatch = updated.find((m) => m.id === match.nextMatchId);
+      if (nextMatch) {
+        const winnerTeam = teams.find((t) => t.id === match.winnerId);
+        const winnerName = winnerTeam
+          ? (winnerTeam.playerName && winnerTeam.playerClass
+              ? `${winnerTeam.playerName} (${winnerTeam.playerClass})`
+              : winnerTeam.name)
+          : 'Vencedor anterior';
 
-          if (match.nextMatchSlot === 'A') {
-            nextMatch.teamAId = match.winnerId;
-            nextMatch.teamAName = winnerName;
-          } else if (match.nextMatchSlot === 'B') {
-            nextMatch.teamBId = match.winnerId;
-            nextMatch.teamBName = winnerName;
-          }
+        if (match.nextMatchSlot === 'A') {
+          nextMatch.teamAId = match.winnerId;
+          nextMatch.teamAName = winnerName;
+        } else if (match.nextMatchSlot === 'B') {
+          nextMatch.teamBId = match.winnerId;
+          nextMatch.teamBName = winnerName;
         }
       }
+    }
 
-      setStoredMatches(updated);
-      return updated;
-    });
+    setMatches(updated);
+    setStoredMatches(updated);
+    syncToServer(teams, updated);
   };
 
   // Compute filtered teams and matches for current modality
@@ -394,6 +483,7 @@ export function App() {
         theme={theme}
         onToggleTheme={handleToggleTheme}
         onManualSave={handleManualSave}
+        isSyncing={isSyncing}
       />
 
       <main className="flex-1">

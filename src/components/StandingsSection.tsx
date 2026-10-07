@@ -3,6 +3,7 @@ import { Team, Match, ModalityType, User } from '../types';
 import { MODALITY_CONFIGS } from '../utils/constants';
 import { getFutsalFemFinalSummary } from '../utils/futsalFemUtils';
 import { Trophy, Medal, Flame, Award, Star, Sparkles, TrendingUp, Shirt, Layers, Swords } from 'lucide-react';
+import confetti from 'canvas-confetti';
 
 interface StandingsSectionProps {
   teams: Team[];
@@ -382,9 +383,18 @@ export const StandingsSection: React.FC<StandingsSectionProps> = ({
                           <div className="flex items-center justify-between mb-4 pt-1">
                             <div className="flex items-center gap-2">
                               {stat.isChampion ? (
-                                <span className="px-3 py-1 bg-amber-400 text-slate-950 text-xs font-black rounded-xl uppercase flex items-center gap-1 shadow-sm">
-                                  <Trophy className="w-3.5 h-3.5" /> 1º Campeã
-                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    try {
+                                      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                                    } catch {}
+                                  }}
+                                  className="px-3 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black rounded-xl uppercase flex items-center gap-1 shadow-md cursor-pointer transition-transform hover:scale-105"
+                                  title="Clique para comemorar com confetes!"
+                                >
+                                  <Trophy className="w-3.5 h-3.5 animate-bounce" /> 1º Campeã 🎉
+                                </button>
                               ) : (
                                 <span className="px-3 py-1 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl uppercase">
                                   Finalista
@@ -494,9 +504,18 @@ export const StandingsSection: React.FC<StandingsSectionProps> = ({
                           <div className="flex items-center justify-between mb-4 pt-1">
                             <div className="flex items-center gap-2">
                               {stat.isChampion ? (
-                                <span className="px-3 py-1 bg-amber-400 text-slate-950 text-xs font-black rounded-xl uppercase flex items-center gap-1 shadow-sm">
-                                  <Trophy className="w-3.5 h-3.5" /> 1º Campeão
-                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    try {
+                                      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                                    } catch {}
+                                  }}
+                                  className="px-3 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black rounded-xl uppercase flex items-center gap-1 shadow-md cursor-pointer transition-transform hover:scale-105"
+                                  title="Clique para comemorar com confetes!"
+                                >
+                                  <Trophy className="w-3.5 h-3.5 animate-bounce" /> 1º Campeão 🎉
+                                </button>
                               ) : isGold ? (
                                 <span className="px-2.5 py-1 bg-amber-500/20 text-amber-400 border border-amber-400/40 text-xs font-black rounded-xl flex items-center gap-1">
                                   🥇 1º Lugar

@@ -31,6 +31,7 @@ interface NavbarProps {
   theme?: 'light' | 'dark';
   onToggleTheme?: () => void;
   onManualSave?: () => Promise<any>;
+  isSyncing?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -46,6 +47,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   theme = 'dark',
   onToggleTheme,
   onManualSave,
+  isSyncing = false,
 }) => {
   const isBeforeTarget = new Date().getTime() < COUNTDOWN_TARGET.getTime();
   const isDark = theme === 'dark';
@@ -74,6 +76,20 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center justify-between h-20">
           {/* Brand Logo & Admin Settings */}
           <div className="flex items-center gap-3">
+            {/* Live Shared Server Indicator */}
+            <div
+              title="Sincronização em tempo real ativa: todos os visitantes do site hospedado veem os mesmos dados salvos no servidor."
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border shadow-xs select-none ${
+                isDark
+                  ? 'bg-slate-950/70 border-emerald-900/60 text-emerald-400'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${isSyncing ? 'bg-amber-400 animate-ping' : 'bg-emerald-400 animate-pulse'}`} />
+              <span className="hidden md:inline font-mono">
+                {isSyncing ? 'Sincronizando...' : 'Online • Salvo no Site'}
+              </span>
+            </div>
 
             {/* Quick Manual Save Button */}
             {(user?.role === 'admin' || user?.role === 'subadmin') && onManualSave && (
