@@ -34,7 +34,6 @@ interface AdminSettingsModalProps {
   matches?: Match[];
   onRestoreBackup?: (teams: Team[], matches: Match[]) => void;
   onManualSave?: () => Promise<{ success: boolean; teamsCount: number; imagesCount: number; timestamp: string }>;
-  onOpenSupabaseModal?: () => void;
   onClearAllTeams?: () => Promise<void>;
 }
 
@@ -49,7 +48,6 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
   matches = [],
   onRestoreBackup,
   onManualSave,
-  onOpenSupabaseModal,
   onClearAllTeams,
 }) => {
   const isDark = theme === 'dark';
@@ -460,20 +458,6 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
                             <KeyRound className="w-3 h-3 text-emerald-500" />
                             Senha: <span className="font-black text-emerald-500">{subAdmin.password}</span>
                           </span>
-                          {onOpenSupabaseModal && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                onClose();
-                                onOpenSupabaseModal();
-                              }}
-                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer"
-                              title="Abrir painel direto do Banco de Dados"
-                            >
-                              <Database className="w-3 h-3 text-emerald-300" />
-                              <span>Ir Direto para o Banco</span>
-                            </button>
-                          )}
                         </div>
                       )}
                     </div>

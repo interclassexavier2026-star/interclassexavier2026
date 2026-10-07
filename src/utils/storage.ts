@@ -2,7 +2,6 @@ import { Team, Match, User, ModalityType } from '../types';
 import { DEFAULT_OFFICIAL_SUBADMINS } from './constants';
 import { EMBLEM_PRESETS } from './emblems';
 import { saveImageToIndexedDb, imageMemoryCache, getAllImagesFromIndexedDb } from './indexedDbStorage';
-import { supabaseSaveTeam, supabaseSaveMatches, supabaseSaveImage, supabaseClearAllTeams, supabaseClearAllMatches } from './supabaseDb';
 
 const STORAGE_KEYS = {
   USER: 'interclasse_user',
@@ -167,16 +166,14 @@ export const setStoredTeams = (teams: Team[]) => {
  */
 export const forceSaveAllData = async (teams: Team[], matches: Match[], user?: User | null) => {
   let imagesSavedCount = 0;
-  // 1. Flush all images to IndexedDB, cache and Supabase
+  // 1. Flush all images to IndexedDB and cache
   if (typeof window !== 'undefined') {
     for (const t of teams) {
       if (t.imageUrl && t.imageUrl.length > 0 && !t.imageUrl.startsWith('idb://')) {
         imageMemoryCache.set(t.id, t.imageUrl);
         await saveImageToIndexedDb(t.id, t.imageUrl);
-        supabaseSaveImage(t.id, t.imageUrl).catch(() => {});
         imagesSavedCount++;
       }
-      supabaseSaveTeam(t).catch(() => {});
     }
   }
 
@@ -185,9 +182,6 @@ export const forceSaveAllData = async (teams: Team[], matches: Match[], user?: U
 
   // 3. Persist matches
   setStoredMatches(matches);
-  if (matches.length > 0) {
-    supabaseSaveMatches(matches).catch(() => {});
-  }
 
   // 4. Persist user if logged in
   if (user) {
@@ -1680,8 +1674,6 @@ export const clearAllRegisteredTeams = async (): Promise<boolean> => {
     localStorage.setItem(STORAGE_KEYS.MATCHES, JSON.stringify([]));
     localStorage.removeItem('interclasse_teams');
     localStorage.removeItem('interclasse_matches');
-    await supabaseClearAllTeams();
-    await supabaseClearAllMatches();
     return true;
   } catch (err) {
     console.error('Error clearing registered teams', err);
